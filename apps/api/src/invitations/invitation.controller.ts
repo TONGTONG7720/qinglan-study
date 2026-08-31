@@ -15,6 +15,7 @@ import {
   UnauthorizedException,
 } from "@nestjs/common";
 import type { Request } from "express";
+import { Throttle } from "@nestjs/throttler";
 import { z } from "zod";
 
 import { AuthService } from "../auth/auth.service.js";
@@ -29,6 +30,9 @@ import type { InvitationValidation } from "./invitation.service.js";
 
 const TokenInputSchema = z.object({ token: z.string().regex(/^[A-Za-z0-9_-]{43}$/u) }).strict();
 const InvitationIdSchema = z.uuid();
+const publicInvitationThrottle = {
+  default: { limit: 20, ttl: 15 * 60_000, blockDuration: 15 * 60_000 },
+} as const;
 
 @Controller("v1/invitations")
 export class InvitationController {
@@ -75,6 +79,7 @@ export class InvitationController {
 
   @Post("validate")
   @HttpCode(200)
+  @Throttle(publicInvitationThrottle)
   async validate(@Body() body: unknown): Promise<InvitationValidation> {
     const parsed = TokenInputSchema.safeParse(body);
     if (!parsed.success) {
@@ -85,6 +90,7 @@ export class InvitationController {
 
   @Post("redeem")
   @HttpCode(201)
+  @Throttle(publicInvitationThrottle)
   async redeem(@Body() body: unknown): Promise<RedeemedInvitation> {
     const parsed = RedeemInvitationInputSchema.safeParse(body);
     if (!parsed.success) {

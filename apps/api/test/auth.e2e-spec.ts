@@ -16,9 +16,13 @@ describe("database-backed authentication", () => {
   let app: INestApplication | undefined;
   let prisma: PrismaService;
   let baseUrl: string;
+  const originalCookieName = process.env.SESSION_COOKIE_NAME;
+  const originalCookieSecure = process.env.SESSION_COOKIE_SECURE;
 
   beforeAll(async () => {
     process.env.DATABASE_URL = databaseUrl;
+    process.env.SESSION_COOKIE_NAME = "__Host-qinglang_session";
+    process.env.SESSION_COOKIE_SECURE = "true";
     prisma = new PrismaService();
     await prisma.onModuleInit();
     await prisma.user.deleteMany({ where: { loginId } });
@@ -44,6 +48,16 @@ describe("database-backed authentication", () => {
     await app?.close();
     await prisma.user.deleteMany({ where: { loginId } });
     await prisma.onModuleDestroy();
+    if (originalCookieName === undefined) {
+      Reflect.deleteProperty(process.env, "SESSION_COOKIE_NAME");
+    } else {
+      process.env.SESSION_COOKIE_NAME = originalCookieName;
+    }
+    if (originalCookieSecure === undefined) {
+      Reflect.deleteProperty(process.env, "SESSION_COOKIE_SECURE");
+    } else {
+      process.env.SESSION_COOKIE_SECURE = originalCookieSecure;
+    }
   });
 
   it("logs in, stores only the token hash, resolves me and revokes logout", async () => {
@@ -56,6 +70,12 @@ describe("database-backed authentication", () => {
 
     const setCookie = loginResponse.headers.get("set-cookie");
     expect(setCookie).not.toBeNull();
+    expect(setCookie).toContain("__Host-qinglang_session=");
+    expect(setCookie).toContain("HttpOnly");
+    expect(setCookie).toContain("Secure");
+    expect(setCookie).toContain("SameSite=Lax");
+    expect(setCookie).toContain("Path=/");
+    expect(setCookie).not.toContain("Domain=");
     const cookie = setCookie?.split(";", 1)[0];
     if (cookie === undefined) {
       throw new Error("Login did not return a session cookie");

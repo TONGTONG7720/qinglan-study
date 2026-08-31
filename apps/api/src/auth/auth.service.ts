@@ -3,6 +3,7 @@ import { CurrentUserSchema } from "@study/contracts";
 import { Injectable, UnauthorizedException } from "@nestjs/common";
 
 import { PrismaService } from "../common/prisma/prisma.service.js";
+import { RedactingLoggerService } from "../common/logging/redacting-logger.service.js";
 import { PasswordService } from "./password.service.js";
 import { SessionTokenService } from "./session-token.service.js";
 
@@ -16,15 +17,21 @@ export interface LoginResult {
   user: CurrentUser;
 }
 
+export interface AuthenticationAuditContext {
+  interface: "login" | "reauthentication";
+  requestId: string | undefined;
+}
+
 @Injectable()
 export class AuthService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly passwords: PasswordService,
     private readonly tokens: SessionTokenService,
+    private readonly logger: RedactingLoggerService,
   ) {}
 
-  async login(input: LoginInput): Promise<LoginResult> {
+  async login(input: LoginInput, audit: AuthenticationAuditContext): Promise<LoginResult> {
     const user = await this.prisma.user.findUnique({
       where: { loginId: input.loginId },
       include: {
@@ -41,6 +48,11 @@ export class AuthService {
       input.password,
     );
     if (user?.status !== "ACTIVE" || !passwordMatches) {
+      this.logger.warn({
+        event: "authentication_failed",
+        interface: audit.interface,
+        requestId: audit.requestId,
+      });
       throw new UnauthorizedException();
     }
 
@@ -58,6 +70,11 @@ export class AuthService {
 
     await this.prisma.session.create({
       data: { userId: user.id, tokenHash: issued.tokenHash, expiresAt },
+    });
+    this.logger.log({
+      event: "authentication_succeeded",
+      interface: audit.interface,
+      requestId: audit.requestId,
     });
 
     return { rawToken: issued.rawToken, expiresAt, user: currentUser };
@@ -107,7 +124,11 @@ export class AuthService {
     });
   }
 
-  async reauthenticate(userId: string, password: string): Promise<void> {
+  async reauthenticate(
+    userId: string,
+    password: string,
+    audit: AuthenticationAuditContext,
+  ): Promise<void> {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
       select: { passwordHash: true, status: true },
@@ -117,7 +138,17 @@ export class AuthService {
       password,
     );
     if (user?.status !== "ACTIVE" || !passwordMatches) {
+      this.logger.warn({
+        event: "authentication_failed",
+        interface: audit.interface,
+        requestId: audit.requestId,
+      });
       throw new UnauthorizedException();
     }
+    this.logger.log({
+      event: "authentication_succeeded",
+      interface: audit.interface,
+      requestId: audit.requestId,
+    });
   }
 }

@@ -25,7 +25,7 @@ if (
 
 const loginResponse = await fetch(`${baseUrl}/v1/auth/login`, {
   method: "POST",
-  headers: { "Content-Type": "application/json" },
+  headers: { "Content-Type": "application/json", "X-Qinglang-CSRF": "1" },
   body: JSON.stringify({ loginId, password }),
 });
 if (!loginResponse.ok) {
@@ -37,7 +37,7 @@ if (cookie === undefined) {
 }
 const proofResponse = await fetch(`${baseUrl}/v1/auth/reauthenticate`, {
   method: "POST",
-  headers: { Cookie: cookie, "Content-Type": "application/json" },
+  headers: { Cookie: cookie, "Content-Type": "application/json", "X-Qinglang-CSRF": "1" },
   body: JSON.stringify({ password }),
 });
 if (!proofResponse.ok) {
@@ -62,6 +62,7 @@ try {
       headers: {
         Cookie: cookie,
         "Content-Type": "application/json",
+        "X-Qinglang-CSRF": "1",
         "idempotency-key": `curriculum-import:${digest.slice(0, 48)}`,
         "x-reauth-proof": proofBody.proof,
       },
@@ -79,7 +80,7 @@ try {
 } finally {
   await fetch(`${baseUrl}/v1/auth/logout`, {
     method: "POST",
-    headers: { Cookie: cookie },
+    headers: { Cookie: cookie, "X-Qinglang-CSRF": "1" },
   }).catch(() => undefined);
 }
 

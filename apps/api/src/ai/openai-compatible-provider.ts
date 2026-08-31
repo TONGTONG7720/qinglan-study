@@ -99,19 +99,29 @@ export class OpenAiCompatibleProvider implements ModelProvider {
       throw new Error("MODEL_BASE_URL is required for openai-compatible provider");
     }
     const parsedUrl = new URL(baseUrl);
+    const productionSmokeTest = process.env.PRODUCTION_SMOKE_TEST === "true";
     if (
       parsedUrl.protocol !== "https:"
-      && !(parsedUrl.protocol === "http:" && new Set(["127.0.0.1", "localhost"]).has(parsedUrl.hostname))
+      && !(
+        parsedUrl.protocol === "http:"
+        && process.env.NODE_ENV !== "production"
+        && new Set(["127.0.0.1", "localhost"]).has(parsedUrl.hostname)
+      )
+      && !(
+        parsedUrl.protocol === "http:"
+        && productionSmokeTest
+        && new Set(["127.0.0.1", "localhost"]).has(parsedUrl.hostname)
+      )
     ) {
       throw new Error("MODEL_BASE_URL must use HTTPS unless it targets loopback");
     }
     return ProviderConfigSchema.parse({
       baseUrl,
       apiKey: process.env.MODEL_API_KEY,
-      model: process.env.MODEL_NAME ?? "gpt-5.6-terra",
-      reasoningEffort: process.env.MODEL_REASONING_EFFORT ?? "medium",
-      timeoutMs: Number(process.env.MODEL_TIMEOUT_MS ?? "60000"),
-      costFenPerCall: Number(process.env.MODEL_COST_FEN_PER_CALL ?? "10"),
+      model: process.env.MODEL_NAME,
+      reasoningEffort: process.env.MODEL_REASONING_EFFORT,
+      timeoutMs: Number(process.env.MODEL_TIMEOUT_MS),
+      costFenPerCall: Number(process.env.MODEL_COST_FEN_PER_CALL),
     });
   }
 

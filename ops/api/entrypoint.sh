@@ -1,6 +1,11 @@
 #!/bin/sh
 set -eu
 
+if [ "${NODE_ENV:-}" != "production" ]; then
+  echo "production API image requires NODE_ENV=production" >&2
+  exit 78
+fi
+
 load_required_secret() {
   variable_name="$1"
   secret_path="$2"

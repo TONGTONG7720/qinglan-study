@@ -1,11 +1,25 @@
 import type { ConfirmOcrInput, CreatePrivateObjectInput, CurrentUser, OcrResult, PrivateObjectResponse } from "@study/contracts";
 import { OcrResultSchema, PrivateObjectResponseSchema } from "@study/contracts";
-import { Injectable, NotFoundException } from "@nestjs/common";
+import { Injectable, NotFoundException, ServiceUnavailableException } from "@nestjs/common";
 import { randomUUID } from "node:crypto";
 import { PrismaService } from "../common/prisma/prisma.service.js";
 import { ModelGatewayService } from "./model-gateway.service.js";
 
 function notFound(): never { throw new NotFoundException(); }
+
+export function developmentObjectStorageAvailable(environment: NodeJS.ProcessEnv): boolean {
+  return environment.NODE_ENV === "test"
+    || (
+      environment.NODE_ENV === "development"
+      && environment.OBJECT_STORAGE_PROVIDER === "development-fixture"
+    );
+}
+
+function requireObjectStorage(): void {
+  if (!developmentObjectStorageAvailable(process.env)) {
+    throw new ServiceUnavailableException();
+  }
+}
 
 @Injectable()
 export class OcrService {
@@ -13,6 +27,7 @@ export class OcrService {
 
   async createObject(actor: CurrentUser, studentId: string, input: CreatePrivateObjectInput): Promise<PrivateObjectResponse> {
     this.requireOwnStudent(actor, studentId);
+    requireObjectStorage();
     const object = await this.prisma.privateObject.create({
       data: {
         ownerStudentUserId: studentId, storageKey: `private/${studentId}/${randomUUID()}`,
@@ -26,11 +41,13 @@ export class OcrService {
   async getObject(actor: CurrentUser, objectId: string): Promise<PrivateObjectResponse> {
     const object = await this.prisma.privateObject.findFirst({ where: { id: objectId, ownerStudentUserId: actor.id, status: { not: "DELETED" } } });
     if (object === null) return notFound();
+    requireObjectStorage();
     return this.objectResult(object);
   }
 
   async start(actor: CurrentUser, studentId: string, objectId: string): Promise<OcrResult> {
     this.requireOwnStudent(actor, studentId);
+    requireObjectStorage();
     const object = await this.prisma.privateObject.findFirst({
       where: { id: objectId, ownerStudentUserId: studentId, status: "READY", scanPassed: true },
     });

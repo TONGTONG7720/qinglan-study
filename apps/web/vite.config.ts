@@ -1,8 +1,29 @@
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vitest/config";
+import { loadEnv } from "vite";
 import { fileURLToPath, URL } from "node:url";
 
-export default defineConfig(({ mode }) => ({
+export function assertProductionBuildEnvironment(
+  mode: string,
+  environment: Readonly<Record<string, string | undefined>>,
+): void {
+  if (
+    mode === "production"
+    && (
+      environment.VITE_ENABLE_DEMO_COURSE_CATALOG === "true"
+      || environment.VITE_QA_DEMO_BUILD === "true"
+    )
+  ) {
+    throw new Error("Production Web builds must disable demo and QA data flags");
+  }
+}
+
+export default defineConfig(({ mode }) => {
+  const environmentDirectory = fileURLToPath(new URL(".", import.meta.url));
+  const loadedEnvironment = loadEnv(mode, environmentDirectory, "");
+  assertProductionBuildEnvironment(mode, { ...loadedEnvironment, ...process.env });
+
+  return {
   base: mode === "qa" ? "./" : "/",
   build: {
     rolldownOptions: {
@@ -124,4 +145,5 @@ export default defineConfig(({ mode }) => ({
     setupFiles: ["./src/test/setup.ts"],
     css: true,
   },
-}));
+  };
+});

@@ -98,7 +98,7 @@ if (targets.some((target) => target.status !== "DRAFT")) {
 
 const loginResponse = await fetch(`${baseUrl}/v1/auth/login`, {
   method: "POST",
-  headers: { "Content-Type": "application/json" },
+  headers: { "Content-Type": "application/json", "X-Qinglang-CSRF": "1" },
   body: JSON.stringify({ loginId, password }),
 });
 if (!loginResponse.ok) throw new Error(`Curriculum admin login failed with HTTP ${String(loginResponse.status)}`);
@@ -106,7 +106,7 @@ const cookie = loginResponse.headers.get("set-cookie")?.split(";", 1)[0];
 if (cookie === undefined) throw new Error("Curriculum admin login did not return a session cookie");
 const proofResponse = await fetch(`${baseUrl}/v1/auth/reauthenticate`, {
   method: "POST",
-  headers: { Cookie: cookie, "Content-Type": "application/json" },
+  headers: { Cookie: cookie, "Content-Type": "application/json", "X-Qinglang-CSRF": "1" },
   body: JSON.stringify({ password }),
 });
 if (!proofResponse.ok) throw new Error(`Curriculum admin reauthentication failed with HTTP ${String(proofResponse.status)}`);
@@ -124,6 +124,7 @@ try {
       headers: {
         Cookie: cookie,
         "Content-Type": "application/json",
+        "X-Qinglang-CSRF": "1",
         "idempotency-key": `curriculum-online:${operation.slice(0, 40)}`,
         "x-reauth-proof": proofBody.proof,
       },
@@ -138,7 +139,10 @@ try {
     confirmed.push({ ...target, status: summary.status });
   }
 } finally {
-  await fetch(`${baseUrl}/v1/auth/logout`, { method: "POST", headers: { Cookie: cookie } }).catch(() => undefined);
+  await fetch(`${baseUrl}/v1/auth/logout`, {
+    method: "POST",
+    headers: { Cookie: cookie, "X-Qinglang-CSRF": "1" },
+  }).catch(() => undefined);
 }
 
 const verificationClient = new pg.Client({ connectionString: databaseUrl });

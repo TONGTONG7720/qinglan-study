@@ -48,7 +48,7 @@ try {
 
 const loginResponse = await fetch(`${baseUrl}/v1/auth/login`, {
   method: "POST",
-  headers: { "Content-Type": "application/json" },
+  headers: { "Content-Type": "application/json", "X-Qinglang-CSRF": "1" },
   body: JSON.stringify({ loginId, password }),
 });
 if (!loginResponse.ok) throw new Error(`Question-bank admin login failed with HTTP ${String(loginResponse.status)}`);
@@ -56,7 +56,7 @@ const cookie = loginResponse.headers.get("set-cookie")?.split(";", 1)[0];
 if (cookie === undefined) throw new Error("Question-bank admin login did not return a session cookie");
 const proofResponse = await fetch(`${baseUrl}/v1/auth/reauthenticate`, {
   method: "POST",
-  headers: { Cookie: cookie, "Content-Type": "application/json" },
+  headers: { Cookie: cookie, "Content-Type": "application/json", "X-Qinglang-CSRF": "1" },
   body: JSON.stringify({ password }),
 });
 if (!proofResponse.ok) throw new Error(`Question-bank reauthentication failed with HTTP ${String(proofResponse.status)}`);
@@ -97,7 +97,10 @@ try {
     imported.push(checked);
   }
 } finally {
-  await fetch(`${baseUrl}/v1/auth/logout`, { method: "POST", headers: { Cookie: cookie } }).catch(() => undefined);
+  await fetch(`${baseUrl}/v1/auth/logout`, {
+    method: "POST",
+    headers: { Cookie: cookie, "X-Qinglang-CSRF": "1" },
+  }).catch(() => undefined);
 }
 
 process.stdout.write(JSON.stringify({
@@ -116,6 +119,7 @@ async function post(path, body, operationKey, expectedStatus) {
     headers: {
       Cookie: cookie,
       "Content-Type": "application/json",
+      "X-Qinglang-CSRF": "1",
       "idempotency-key": `question-bank-pilot:${key.slice(0, 40)}`,
       "x-reauth-proof": proofBody.proof,
     },

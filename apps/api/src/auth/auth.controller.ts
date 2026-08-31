@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+
 import { LoginInputSchema, ReauthenticateInputSchema } from "@study/contracts";
 import type { CurrentUser } from "@study/contracts";
 import {
@@ -12,9 +14,39 @@ import {
   UnauthorizedException,
 } from "@nestjs/common";
 import type { Request, Response } from "express";
+import { Throttle } from "@nestjs/throttler";
+import type { ThrottlerGetTrackerFunction } from "@nestjs/throttler";
 
+import type { RequestWithId } from "../common/http/request-id.middleware.js";
 import { AuthService } from "./auth.service.js";
 import { ReauthenticationProofService } from "./reauthentication-proof.service.js";
+
+const credentialTracker: ThrottlerGetTrackerFunction = (request) => {
+  const requestRecord = request as unknown as Readonly<Record<string, unknown>>;
+  const body = requestRecord.body;
+  const loginId = typeof body === "object" && body !== null && "loginId" in body
+    && typeof body.loginId === "string"
+    ? body.loginId.trim().toLowerCase()
+    : undefined;
+  const headers = typeof requestRecord.headers === "object" && requestRecord.headers !== null
+    ? requestRecord.headers as Readonly<Record<string, unknown>>
+    : {};
+  const cookie = typeof headers.cookie === "string" ? headers.cookie : undefined;
+  const ip = typeof requestRecord.ip === "string" ? requestRecord.ip : "unknown";
+  const discriminator = loginId === undefined
+    ? cookie === undefined ? `ip:${ip}` : `session:${cookie}`
+    : `login:${loginId}`;
+  return createHash("sha256").update(discriminator, "utf8").digest("hex");
+};
+
+const credentialThrottle = {
+  default: {
+    limit: 10,
+    ttl: 15 * 60_000,
+    blockDuration: 15 * 60_000,
+    getTracker: credentialTracker,
+  },
+} as const;
 
 function sessionCookieName(): string {
   const configured = process.env.SESSION_COOKIE_NAME?.trim();
@@ -43,7 +75,9 @@ export class AuthController {
 
   @Post("login")
   @HttpCode(200)
+  @Throttle(credentialThrottle)
   async login(
+    @Req() request: RequestWithId,
     @Body() body: unknown,
     @Res({ passthrough: true }) response: Response,
   ): Promise<{ user: CurrentUser }> {
@@ -51,7 +85,10 @@ export class AuthController {
     if (!parsed.success) {
       throw new BadRequestException();
     }
-    const result = await this.auth.login(parsed.data);
+    const result = await this.auth.login(parsed.data, {
+      interface: "login",
+      requestId: request.requestId,
+    });
     response.cookie(sessionCookieName(), result.rawToken, {
       httpOnly: true,
       secure: process.env.SESSION_COOKIE_SECURE === "true",
@@ -85,8 +122,9 @@ export class AuthController {
 
   @Post("reauthenticate")
   @HttpCode(200)
+  @Throttle(credentialThrottle)
   async reauthenticate(
-    @Req() request: Request,
+    @Req() request: RequestWithId,
     @Body() body: unknown,
   ): Promise<{ proof: string; expiresAt: string }> {
     const parsed = ReauthenticateInputSchema.safeParse(body);
@@ -95,7 +133,10 @@ export class AuthController {
     }
     const rawToken = readSessionCookie(request);
     const user = await this.auth.resolve(rawToken);
-    await this.auth.reauthenticate(user.id, parsed.data.password);
+    await this.auth.reauthenticate(user.id, parsed.data.password, {
+      interface: "reauthentication",
+      requestId: request.requestId,
+    });
     const issued = this.proofs.issue(user.id, rawToken);
     return { proof: issued.proof, expiresAt: issued.expiresAt.toISOString() };
   }

@@ -446,7 +446,7 @@ async function writeContext(session, studentUserId, textbook, studentKey, action
 async function authenticatedSession(credential, label) {
   const response = await fetch(`${apiBaseUrl}/v1/auth/login`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", "X-Qinglang-CSRF": "1" },
     body: JSON.stringify(credential),
   });
   if (!response.ok) throw new Error(`${label} login failed with HTTP ${String(response.status)}`);
@@ -460,7 +460,11 @@ async function authenticatedSession(credential, label) {
 async function refreshProof(session, password, label) {
   const response = await fetch(`${apiBaseUrl}/v1/auth/reauthenticate`, {
     method: "POST",
-    headers: { Cookie: session.cookie, "Content-Type": "application/json" },
+    headers: {
+      Cookie: session.cookie,
+      "Content-Type": "application/json",
+      "X-Qinglang-CSRF": "1",
+    },
     body: JSON.stringify({ password }),
   });
   if (!response.ok) throw new Error(`${label} reauthentication failed with HTTP ${String(response.status)}`);
@@ -474,6 +478,7 @@ async function writeRequest({ session, path, body, idempotencyKey: key, schema, 
     headers: {
       Cookie: session.cookie,
       "Content-Type": "application/json",
+      "X-Qinglang-CSRF": "1",
       "idempotency-key": key,
       "x-reauth-proof": session.proof,
     },
@@ -486,7 +491,7 @@ async function writeRequest({ session, path, body, idempotencyKey: key, schema, 
 async function publicRequest({ path, body, schema, label }) {
   const response = await fetch(`${apiBaseUrl}${path}`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", "X-Qinglang-CSRF": "1" },
     body: JSON.stringify(body),
   });
   if (!response.ok) throw new Error(`${label} failed with HTTP ${String(response.status)}`);
@@ -502,7 +507,7 @@ async function readRequest({ session, path, schema, label }) {
 async function logout(session) {
   await fetch(`${apiBaseUrl}/v1/auth/logout`, {
     method: "POST",
-    headers: { Cookie: session.cookie },
+    headers: { Cookie: session.cookie, "X-Qinglang-CSRF": "1" },
   }).catch(() => undefined);
 }
 

@@ -1,10 +1,24 @@
+import { isIP } from "node:net";
+
 import { z } from "zod";
+
+const placeholderPattern = /(change[-_ ]?me|development|example|fictional|local[-_ ]?only|replace|test[-_ ]?only)/iu;
+const loopbackHosts = new Set(["127.0.0.1", "localhost", "::1"]);
+
+const BooleanEnvironmentSchema = z
+  .enum(["true", "false"])
+  .transform((value) => value === "true");
 
 const AppConfigSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   API_HOST: z.string().trim().min(1).default("127.0.0.1"),
   API_PORT: z.coerce.number().int().min(1).max(65_535).default(3001),
   TRUST_PROXY_HOPS: z.coerce.number().int().min(0).max(2).default(0),
+  REQUEST_BODY_LIMIT_BYTES: z.coerce.number().int().min(16_384).max(2_000_000).default(256_000),
+  CSRF_PROTECTION_ENABLED: BooleanEnvironmentSchema.default(false),
+  MODEL_PROVIDER: z.enum(["disabled", "fake", "openai-compatible"]).default("disabled"),
+  OBJECT_STORAGE_PROVIDER: z.enum(["disabled", "development-fixture"]).default("disabled"),
+  EMAIL_PROVIDER: z.literal("disabled").default("disabled"),
   ALLOWED_ORIGINS: z
     .string()
     .default("http://127.0.0.1:3000")
@@ -14,7 +28,10 @@ const AppConfigSchema = z.object({
         .map((origin) => origin.trim())
         .filter((origin) => origin.length > 0),
     )
-    .pipe(z.array(z.url()).min(1)),
+    .pipe(z.array(z.url()).min(1))
+    .refine((origins) => new Set(origins).size === origins.length, {
+      message: "ALLOWED_ORIGINS entries must be unique",
+    }),
 });
 
 export type AppConfig = z.infer<typeof AppConfigSchema>;
@@ -25,6 +42,108 @@ function addProductionIssue(
   message: string,
 ): void {
   context.addIssue({ code: "custom", path: [path], message });
+}
+
+function hasStrongSecretShape(value: string, minimumLength: number): boolean {
+  return value.length >= minimumLength
+    && value.length <= 512
+    && value.trim() === value
+    && !/\s/u.test(value)
+    && !placeholderPattern.test(value)
+    && new Set(value).size >= 8;
+}
+
+function isPrivateIpv4(hostname: string): boolean {
+  const octets = hostname.split(".").map((part) => Number(part));
+  if (octets.length !== 4 || octets.some((part) => !Number.isInteger(part))) {
+    return false;
+  }
+  const [first = -1, second = -1] = octets;
+  return first === 10
+    || first === 127
+    || (first === 169 && second === 254)
+    || (first === 172 && second >= 16 && second <= 31)
+    || (first === 192 && second === 168);
+}
+
+function isPrivateProviderHost(hostname: string): boolean {
+  const normalizedHostname = hostname.startsWith("[") && hostname.endsWith("]")
+    ? hostname.slice(1, -1)
+    : hostname;
+  if (loopbackHosts.has(normalizedHostname)) {
+    return true;
+  }
+  const addressKind = isIP(normalizedHostname);
+  if (addressKind === 4) {
+    return isPrivateIpv4(normalizedHostname);
+  }
+  if (addressKind === 6) {
+    const normalized = normalizedHostname.toLowerCase();
+    return normalized === "::1"
+      || normalized.startsWith("fc")
+      || normalized.startsWith("fd")
+      || normalized.startsWith("fe80:");
+  }
+  return false;
+}
+
+function validateDatabaseUrl(value: string, context: z.RefinementCtx): void {
+  let databaseUrl: URL;
+  try {
+    databaseUrl = new URL(value);
+  } catch {
+    addProductionIssue(context, "DATABASE_URL", "DATABASE_URL must be a valid PostgreSQL URL");
+    return;
+  }
+  if (!new Set(["postgresql:", "postgres:"]).has(databaseUrl.protocol)) {
+    addProductionIssue(context, "DATABASE_URL", "DATABASE_URL must use PostgreSQL");
+  }
+  const username = decodeURIComponent(databaseUrl.username);
+  const password = decodeURIComponent(databaseUrl.password);
+  if (new Set(["postgres", "root", "study", "qinglang_admin", "qinglang_migrator"])
+    .has(username)) {
+    addProductionIssue(
+      context,
+      "DATABASE_URL",
+      "the API must use a dedicated least-privilege database account",
+    );
+  }
+  if (username.length === 0 || !hasStrongSecretShape(password, 32)) {
+    addProductionIssue(
+      context,
+      "DATABASE_URL",
+      "the production database URL must contain a named account and strong password",
+    );
+  }
+}
+
+function validateProviderUrl(
+  value: string,
+  smokeTest: boolean,
+  context: z.RefinementCtx,
+): void {
+  let providerUrl: URL;
+  try {
+    providerUrl = new URL(value);
+  } catch {
+    addProductionIssue(context, "MODEL_BASE_URL", "MODEL_BASE_URL must be a valid URL");
+    return;
+  }
+  const smokeLoopback = smokeTest
+    && providerUrl.protocol === "http:"
+    && loopbackHosts.has(providerUrl.hostname);
+  if (providerUrl.protocol !== "https:" && !smokeLoopback) {
+    addProductionIssue(context, "MODEL_BASE_URL", "MODEL_BASE_URL must use HTTPS");
+  }
+  if (providerUrl.username.length > 0 || providerUrl.password.length > 0) {
+    addProductionIssue(context, "MODEL_BASE_URL", "MODEL_BASE_URL must not contain credentials");
+  }
+  if (providerUrl.search.length > 0 || providerUrl.hash.length > 0) {
+    addProductionIssue(context, "MODEL_BASE_URL", "MODEL_BASE_URL must not contain query or fragment data");
+  }
+  if (!smokeTest && isPrivateProviderHost(providerUrl.hostname)) {
+    addProductionIssue(context, "MODEL_BASE_URL", "MODEL_BASE_URL must not target a private address");
+  }
 }
 
 function validateProductionEnvironment(
@@ -38,12 +157,18 @@ function validateProductionEnvironment(
   const ProductionEnvironmentSchema = z
     .object({
       DATABASE_URL: z.string().trim().min(1),
-      SESSION_COOKIE_NAME: z.string().trim().min(1),
+      SESSION_COOKIE_NAME: z.string().trim().regex(/^__Host-[A-Za-z0-9_-]{1,100}$/u),
       SESSION_COOKIE_SECURE: z.literal("true"),
-      REAUTH_PROOF_SECRET: z.string().min(32),
-      INVITATION_TOKEN_SECRET: z.string().min(32),
+      REAUTH_PROOF_SECRET: z.string(),
+      INVITATION_TOKEN_SECRET: z.string(),
       EXPECTED_MIGRATION_NAME: z.string().regex(/^\d{14}_[a-z0-9_]+$/u),
+      REQUEST_BODY_LIMIT_BYTES: z.coerce.number().int().min(16_384).max(2_000_000),
+      CSRF_PROTECTION_ENABLED: z.literal("true"),
+      VITE_ENABLE_DEMO_COURSE_CATALOG: z.literal("false"),
+      VITE_QA_DEMO_BUILD: z.literal("false"),
       MODEL_PROVIDER: z.enum(["disabled", "openai-compatible"]),
+      OBJECT_STORAGE_PROVIDER: z.literal("disabled"),
+      EMAIL_PROVIDER: z.literal("disabled"),
       MODEL_BASE_URL: z.string().trim().optional(),
       MODEL_API_KEY: z.string().optional(),
       MODEL_NAME: z.string().trim().optional(),
@@ -52,74 +177,83 @@ function validateProductionEnvironment(
         .optional(),
       MODEL_TIMEOUT_MS: z.coerce.number().int().min(1_000).max(120_000).optional(),
       MODEL_COST_FEN_PER_CALL: z.coerce.number().int().positive().max(1_000_000).optional(),
+      OBJECT_STORAGE_ENDPOINT: z.string().trim().optional(),
+      OBJECT_STORAGE_REGION: z.string().trim().optional(),
+      OBJECT_STORAGE_BUCKET: z.string().trim().optional(),
+      OBJECT_STORAGE_ACCESS_KEY_ID: z.string().trim().optional(),
+      OBJECT_STORAGE_SECRET_ACCESS_KEY: z.string().optional(),
+      SMTP_HOST: z.string().trim().optional(),
+      SMTP_USERNAME: z.string().trim().optional(),
+      SMTP_PASSWORD: z.string().optional(),
       PRODUCTION_SMOKE_TEST: z.enum(["true", "false"]).default("false"),
     })
     .superRefine((value, context) => {
-      let databaseUrl: URL | undefined;
-      try {
-        databaseUrl = new URL(value.DATABASE_URL);
-      } catch {
-        addProductionIssue(context, "DATABASE_URL", "DATABASE_URL must be a valid PostgreSQL URL");
+      validateDatabaseUrl(value.DATABASE_URL, context);
+      if (!hasStrongSecretShape(value.REAUTH_PROOF_SECRET, 48)) {
+        addProductionIssue(context, "REAUTH_PROOF_SECRET", "REAUTH_PROOF_SECRET must be a strong secret");
       }
-      if (
-        databaseUrl !== undefined
-        && !new Set(["postgresql:", "postgres:"]).has(databaseUrl.protocol)
-      ) {
-        addProductionIssue(context, "DATABASE_URL", "DATABASE_URL must use PostgreSQL");
-      }
-      if (
-        databaseUrl !== undefined
-        && new Set(["postgres", "root", "study", "qinglang_admin", "qinglang_migrator"])
-          .has(decodeURIComponent(databaseUrl.username))
-      ) {
+      if (!hasStrongSecretShape(value.INVITATION_TOKEN_SECRET, 48)) {
         addProductionIssue(
           context,
-          "DATABASE_URL",
-          "the API must use a dedicated least-privilege database account",
+          "INVITATION_TOKEN_SECRET",
+          "INVITATION_TOKEN_SECRET must be a strong secret",
         );
       }
-      if (
-        databaseUrl !== undefined
-        && (
-          decodeURIComponent(databaseUrl.username).length === 0
-          || decodeURIComponent(databaseUrl.password).length < 20
-        )
-      ) {
-        addProductionIssue(
-          context,
-          "DATABASE_URL",
-          "the production database URL must contain a named account and strong password",
-        );
+      if (value.REAUTH_PROOF_SECRET === value.INVITATION_TOKEN_SECRET) {
+        addProductionIssue(context, "INVITATION_TOKEN_SECRET", "production secrets must be distinct");
       }
-      if (!value.SESSION_COOKIE_NAME.startsWith("__Host-")) {
-        addProductionIssue(
-          context,
-          "SESSION_COOKIE_NAME",
-          "production cookies must use the __Host- prefix",
-        );
-      }
+
+      const smokeTest = value.PRODUCTION_SMOKE_TEST === "true";
       if (value.MODEL_PROVIDER === "openai-compatible") {
-        if (value.MODEL_BASE_URL === undefined) {
+        if (value.MODEL_BASE_URL === undefined || value.MODEL_BASE_URL.length === 0) {
           addProductionIssue(context, "MODEL_BASE_URL", "MODEL_BASE_URL is required");
         } else {
-          try {
-            const providerUrl = new URL(value.MODEL_BASE_URL);
-            const smokeLoopback = value.PRODUCTION_SMOKE_TEST === "true"
-              && providerUrl.protocol === "http:"
-              && new Set(["127.0.0.1", "localhost"]).has(providerUrl.hostname);
-            if (providerUrl.protocol !== "https:" && !smokeLoopback) {
-              addProductionIssue(context, "MODEL_BASE_URL", "MODEL_BASE_URL must use HTTPS");
-            }
-          } catch {
-            addProductionIssue(context, "MODEL_BASE_URL", "MODEL_BASE_URL must be a valid URL");
-          }
+          validateProviderUrl(value.MODEL_BASE_URL, smokeTest, context);
         }
-        if ((value.MODEL_API_KEY?.length ?? 0) < 20) {
-          addProductionIssue(context, "MODEL_API_KEY", "MODEL_API_KEY must contain at least 20 characters");
+        if (value.MODEL_API_KEY === undefined || !hasStrongSecretShape(value.MODEL_API_KEY, 20)) {
+          addProductionIssue(context, "MODEL_API_KEY", "MODEL_API_KEY must contain a real provider key");
         }
-        if ((value.MODEL_NAME?.length ?? 0) === 0) {
+        if (value.MODEL_NAME === undefined || value.MODEL_NAME.length === 0) {
           addProductionIssue(context, "MODEL_NAME", "MODEL_NAME is required");
         }
+        if (value.MODEL_REASONING_EFFORT === undefined) {
+          addProductionIssue(context, "MODEL_REASONING_EFFORT", "MODEL_REASONING_EFFORT is required");
+        }
+        if (value.MODEL_TIMEOUT_MS === undefined) {
+          addProductionIssue(context, "MODEL_TIMEOUT_MS", "MODEL_TIMEOUT_MS is required");
+        }
+        if (value.MODEL_COST_FEN_PER_CALL === undefined) {
+          addProductionIssue(context, "MODEL_COST_FEN_PER_CALL", "MODEL_COST_FEN_PER_CALL is required");
+        }
+      } else if (
+        (value.MODEL_BASE_URL?.length ?? 0) > 0
+        || (value.MODEL_API_KEY?.length ?? 0) > 0
+        || (value.MODEL_NAME?.length ?? 0) > 0
+      ) {
+        addProductionIssue(context, "MODEL_PROVIDER", "disabled model configuration must not include provider credentials");
+      }
+
+      const disabledStorageValues = [
+        value.OBJECT_STORAGE_ENDPOINT,
+        value.OBJECT_STORAGE_REGION,
+        value.OBJECT_STORAGE_BUCKET,
+        value.OBJECT_STORAGE_ACCESS_KEY_ID,
+        value.OBJECT_STORAGE_SECRET_ACCESS_KEY,
+      ];
+      if (disabledStorageValues.some((entry) => (entry?.length ?? 0) > 0)) {
+        addProductionIssue(
+          context,
+          "OBJECT_STORAGE_PROVIDER",
+          "object storage is disabled until a production adapter is implemented",
+        );
+      }
+      if ([value.SMTP_HOST, value.SMTP_USERNAME, value.SMTP_PASSWORD]
+        .some((entry) => (entry?.length ?? 0) > 0)) {
+        addProductionIssue(
+          context,
+          "EMAIL_PROVIDER",
+          "email delivery is disabled until a production adapter is implemented",
+        );
       }
     });
 
@@ -133,17 +267,26 @@ function validateProductionEnvironment(
   if (config.TRUST_PROXY_HOPS !== 1) {
     throw new Error("TRUST_PROXY_HOPS must be 1 when Caddy is the only trusted proxy");
   }
-
+  if (!config.CSRF_PROTECTION_ENABLED) {
+    throw new Error("CSRF protection must be enabled in production");
+  }
+  if (config.MODEL_PROVIDER === "fake") {
+    throw new Error("MODEL_PROVIDER=fake is test-only");
+  }
   const smokeTest = parsedProduction.data.PRODUCTION_SMOKE_TEST === "true";
   for (const origin of config.ALLOWED_ORIGINS) {
     const parsedOrigin = new URL(origin);
-    if (parsedOrigin.origin !== origin) {
-      throw new Error("ALLOWED_ORIGINS entries must be origins without paths or query strings");
+    if (
+      parsedOrigin.origin !== origin
+      || parsedOrigin.username.length > 0
+      || parsedOrigin.password.length > 0
+    ) {
+      throw new Error("ALLOWED_ORIGINS entries must be exact origins without credentials, paths, or query strings");
     }
     if (parsedOrigin.protocol !== "https:") {
       throw new Error("ALLOWED_ORIGINS must use HTTPS in production");
     }
-    if (!smokeTest && new Set(["127.0.0.1", "localhost", "::1"]).has(parsedOrigin.hostname)) {
+    if (!smokeTest && loopbackHosts.has(parsedOrigin.hostname)) {
       throw new Error("loopback ALLOWED_ORIGINS are only valid during an explicit smoke test");
     }
   }

@@ -141,7 +141,10 @@ try {
   }
 } finally {
   await Promise.all(Object.values(sessions).map(async (session) => {
-    await fetch(`${baseUrl}/v1/auth/logout`, { method: "POST", headers: { Cookie: session.cookie } }).catch(() => undefined);
+    await fetch(`${baseUrl}/v1/auth/logout`, {
+      method: "POST",
+      headers: { Cookie: session.cookie, "X-Qinglang-CSRF": "1" },
+    }).catch(() => undefined);
   }));
 }
 
@@ -209,7 +212,7 @@ process.stdout.write(JSON.stringify({
 async function authenticatedSession(credential) {
   const loginResponse = await fetch(`${baseUrl}/v1/auth/login`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", "X-Qinglang-CSRF": "1" },
     body: JSON.stringify({ loginId: credential.loginId, password: credential.password }),
   });
   if (!loginResponse.ok) throw new Error(`Curriculum actor login failed with HTTP ${String(loginResponse.status)}`);
@@ -217,7 +220,7 @@ async function authenticatedSession(credential) {
   if (cookie === undefined) throw new Error("Curriculum actor login did not return a session cookie");
   const proofResponse = await fetch(`${baseUrl}/v1/auth/reauthenticate`, {
     method: "POST",
-    headers: { Cookie: cookie, "Content-Type": "application/json" },
+    headers: { Cookie: cookie, "Content-Type": "application/json", "X-Qinglang-CSRF": "1" },
     body: JSON.stringify({ password: credential.password }),
   });
   if (!proofResponse.ok) throw new Error(`Curriculum actor reauthentication failed with HTTP ${String(proofResponse.status)}`);
@@ -235,6 +238,7 @@ async function post(session, path, body, operationKey, expectedMode) {
     headers: {
       Cookie: session.cookie,
       "Content-Type": "application/json",
+      "X-Qinglang-CSRF": "1",
       "idempotency-key": `curriculum-align:${key.slice(0, 40)}`,
       "x-reauth-proof": session.proof,
     },
