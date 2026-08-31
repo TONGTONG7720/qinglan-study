@@ -249,17 +249,26 @@ describe("Phase 8 mistakes, recovery and deterministic mastery", () => {
       scopeKey: "unit:concurrent",
       type: "INDEPENDENT_ANSWER",
     };
-    const responses = await Promise.all([
-      write(`/v1/students/${studentId}/mastery-evidence`, "phase8-concurrent-0001", body),
-      write(`/v1/students/${studentId}/mastery-evidence`, "phase8-concurrent-0002", body),
-    ]);
-    expect(responses.map((response) => response.status)).toEqual([201, 201]);
+    const responses = await Promise.all(Array.from({ length: 5 }, (_, index) =>
+      write(
+        `/v1/students/${studentId}/mastery-evidence`,
+        `phase8-concurrent-${String(index + 1).padStart(4, "0")}`,
+        body,
+      )));
+    expect(responses.map((response) => response.status)).toEqual([201, 201, 201, 201, 201]);
     const results = await Promise.all(responses.map(async (response) =>
       MasteryEvidenceResultSchema.parse(await response.json())));
-    expect(results[0]?.evidenceId).toBe(results[1]?.evidenceId);
+    expect(new Set(results.map((result) => result.evidenceId)).size).toBe(1);
     expect(await prisma.masteryEvidence.count({
       where: { sourceAttemptId: concurrentSourceId },
     })).toBe(1);
+    expect(await prisma.operation.count({
+      where: {
+        kind: "RECORD_MASTERY_EVIDENCE",
+        status: "RUNNING",
+        userId: studentId,
+      },
+    })).toBe(0);
 
     const conflicting = await write(
       `/v1/students/${studentId}/mastery-evidence`,
@@ -271,6 +280,10 @@ describe("Phase 8 mistakes, recovery and deterministic mastery", () => {
       status: "REVIEW_REQUIRED",
       state: null,
     });
+    expect(await prisma.masteryEvidence.findUnique({
+      where: { sourceAttemptId: concurrentSourceId },
+      select: { status: true },
+    })).toEqual({ status: "REVIEW_REQUIRED" });
     expect(await prisma.masteryState.count({
       where: { studentUserId: studentId, scopeKey: "unit:concurrent" },
     })).toBe(0);

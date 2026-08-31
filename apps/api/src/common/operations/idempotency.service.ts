@@ -1,4 +1,4 @@
-import { createHash, randomUUID } from "node:crypto";
+import { createHash, randomInt, randomUUID } from "node:crypto";
 
 import { ConflictException, Injectable } from "@nestjs/common";
 import type { z } from "zod";
@@ -6,7 +6,9 @@ import type { z } from "zod";
 import type { Prisma } from "../../generated/prisma/client.js";
 import { PrismaService } from "../prisma/prisma.service.js";
 
-const maxSerializableAttempts = 3;
+const maxSerializableAttempts = 5;
+const serializableRetryBaseDelayMs = 10;
+const serializableRetryMaxDelayMs = 100;
 
 interface StoredPayload {
   requestHash: string;
@@ -38,6 +40,18 @@ function serializableConflict(error: unknown): boolean {
   );
 }
 
+function delay(durationMs: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, durationMs));
+}
+
+function serializableRetryDelayMs(attempt: number): number {
+  const exponentialDelay = Math.min(
+    serializableRetryMaxDelayMs,
+    serializableRetryBaseDelayMs * 2 ** (attempt - 1),
+  );
+  return exponentialDelay + randomInt(0, exponentialDelay + 1);
+}
+
 function parseStoredPayload(value: Prisma.JsonValue): StoredPayload {
   if (
     typeof value !== "object"
@@ -66,6 +80,7 @@ export class IdempotencyService {
         if (!serializableConflict(error) || attempt === maxSerializableAttempts) {
           throw error;
         }
+        await delay(serializableRetryDelayMs(attempt));
       }
     }
     throw new ConflictException();
