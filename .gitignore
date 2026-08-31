@@ -16,6 +16,8 @@ coverage/
 Thumbs.db
 docker-data/
 apps/api/src/generated/prisma/
+apps/api/scripts/fixtures/
+apps/web/.impeccable/
 .codegraph/
 .codex/
 .superpowers/
