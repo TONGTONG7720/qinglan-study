@@ -17,7 +17,7 @@ jobs:
   quality:
     name: quality
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     services:
       postgres:
         image: pgvector/pgvector:0.8.6-pg18-trixie
@@ -81,3 +81,14 @@ jobs:
 
       - name: Build
         run: pnpm build
+
+      - name: Validate production Compose
+        run: docker compose --env-file ops/production/production.env.example -f compose.production.yaml config --quiet
+
+      - name: Build production container targets
+        run: |
+          docker build --file apps/api/Dockerfile --target api --tag qinglang-api:ci .
+          docker build --file apps/api/Dockerfile --target migrate --tag qinglang-migrate:ci .
+          docker build --file apps/web/Dockerfile --target gateway --tag qinglang-gateway:ci .
+          docker build --file ops/postgres/Dockerfile --target database --tag qinglang-postgres:ci .
+          docker build --file ops/postgres/Dockerfile --target backup --tag qinglang-backup:ci .

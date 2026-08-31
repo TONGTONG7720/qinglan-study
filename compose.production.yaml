@@ -1,0 +1,352 @@
+name: ${COMPOSE_PROJECT_NAME:-qinglang}
+
+x-service-logging: &service-logging
+  driver: json-file
+  options:
+    max-size: 10m
+    max-file: "5"
+
+x-api-environment: &api-environment
+  NODE_ENV: production
+  API_HOST: 0.0.0.0
+  API_PORT: "3001"
+  TRUST_PROXY_HOPS: "1"
+  ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:?ALLOWED_ORIGINS is required}
+  SESSION_COOKIE_NAME: ${SESSION_COOKIE_NAME:-__Host-qinglang_session}
+  SESSION_COOKIE_SECURE: "true"
+  MODEL_PROVIDER: ${MODEL_PROVIDER:-disabled}
+  MODEL_BASE_URL: ${MODEL_BASE_URL:-}
+  MODEL_NAME: ${MODEL_NAME:-}
+  MODEL_REASONING_EFFORT: ${MODEL_REASONING_EFFORT:-medium}
+  MODEL_TIMEOUT_MS: ${MODEL_TIMEOUT_MS:-60000}
+  MODEL_COST_FEN_PER_CALL: ${MODEL_COST_FEN_PER_CALL:-10}
+  PRODUCTION_SMOKE_TEST: ${PRODUCTION_SMOKE_TEST:-false}
+  DATABASE_URL_FILE: /run/secrets/database_url
+  REAUTH_PROOF_SECRET_FILE: /run/secrets/reauth_proof_secret
+  INVITATION_TOKEN_SECRET_FILE: /run/secrets/invitation_token_secret
+  EXPECTED_MIGRATION_NAME: ${EXPECTED_MIGRATION_NAME:?EXPECTED_MIGRATION_NAME is required}
+  MODEL_API_KEY_FILE: /run/secrets/model_api_key
+
+services:
+  postgres:
+    image: ${POSTGRES_IMAGE_REPOSITORY:-qinglang-postgres}:${INFRA_IMAGE_TAG:?INFRA_IMAGE_TAG is required}
+    build:
+      context: .
+      dockerfile: ops/postgres/Dockerfile
+      target: database
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-qinglang}
+      POSTGRES_USER: ${POSTGRES_ADMIN_USER:-qinglang_admin}
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_admin_password
+      POSTGRES_MIGRATOR_USER: ${POSTGRES_MIGRATOR_USER:-qinglang_migrator}
+      POSTGRES_MIGRATOR_PASSWORD_FILE: /run/secrets/postgres_migrator_password
+      POSTGRES_APP_USER: ${POSTGRES_APP_USER:-qinglang_app}
+      POSTGRES_APP_PASSWORD_FILE: /run/secrets/postgres_app_password
+      POSTGRES_BACKUP_USER: ${POSTGRES_BACKUP_USER:-qinglang_backup}
+      POSTGRES_BACKUP_PASSWORD_FILE: /run/secrets/postgres_backup_password
+      POSTGRES_INITDB_ARGS: --encoding=UTF8 --auth-local=scram-sha-256 --auth-host=scram-sha-256
+      TZ: UTC
+    command:
+      - postgres
+      - -c
+      - password_encryption=scram-sha-256
+      - -c
+      - max_connections=80
+      - -c
+      - shared_buffers=256MB
+      - -c
+      - log_min_duration_statement=1000
+      - -c
+      - log_checkpoints=on
+    volumes:
+      - postgres_data:/var/lib/postgresql
+    secrets:
+      - postgres_admin_password
+      - postgres_migrator_password
+      - postgres_app_password
+      - postgres_backup_password
+    networks:
+      - data
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          PGPASSWORD=$$(cat /run/secrets/postgres_admin_password)
+          psql -U ${POSTGRES_ADMIN_USER:-qinglang_admin} -d ${POSTGRES_DB:-qinglang}
+          -tAc "SELECT CASE WHEN
+          EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '${POSTGRES_MIGRATOR_USER:-qinglang_migrator}') AND
+          EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '${POSTGRES_APP_USER:-qinglang_app}') AND
+          EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '${POSTGRES_BACKUP_USER:-qinglang_backup}') AND
+          EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'vector')
+          THEN 1 ELSE 0 END" | grep -qx 1
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 15s
+    shm_size: 256mb
+    mem_limit: 1536m
+    cpus: 1.5
+    stop_grace_period: 30s
+    security_opt:
+      - no-new-privileges:true
+    logging: *service-logging
+
+  migrate:
+    image: ${MIGRATE_IMAGE_REPOSITORY:-qinglang-migrate}:${IMAGE_TAG:?IMAGE_TAG is required}
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+      target: migrate
+    profiles:
+      - tools
+    environment:
+      <<: *api-environment
+      DATABASE_URL_FILE: /run/secrets/migration_database_url
+    secrets:
+      - migration_database_url
+      - reauth_proof_secret
+      - invitation_token_secret
+      - model_api_key
+    networks:
+      - data
+    depends_on:
+      postgres:
+        condition: service_healthy
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    security_opt:
+      - no-new-privileges:true
+    logging: *service-logging
+
+  api:
+    image: ${API_IMAGE_REPOSITORY:-qinglang-api}:${IMAGE_TAG:?IMAGE_TAG is required}
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+      target: api
+    restart: unless-stopped
+    init: true
+    environment: *api-environment
+    expose:
+      - "3001"
+    secrets:
+      - database_url
+      - reauth_proof_secret
+      - invitation_token_secret
+      - model_api_key
+    networks:
+      - edge
+      - data
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - fetch('http://127.0.0.1:3001/v1/health/ready').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    cap_drop:
+      - ALL
+    mem_limit: 768m
+    cpus: 1.0
+    stop_grace_period: 20s
+    security_opt:
+      - no-new-privileges:true
+    logging: *service-logging
+
+  gateway:
+    image: ${GATEWAY_IMAGE_REPOSITORY:-qinglang-gateway}:${IMAGE_TAG:?IMAGE_TAG is required}
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      target: gateway
+    restart: unless-stopped
+    environment:
+      SITE_ADDRESS: ${SITE_ADDRESS:?SITE_ADDRESS is required}
+      ACME_EMAIL: ${ACME_EMAIL:?ACME_EMAIL is required}
+    ports:
+      - ${PUBLIC_BIND_IP:-0.0.0.0}:${PUBLIC_HTTP_PORT:-80}:80
+      - ${PUBLIC_BIND_IP:-0.0.0.0}:${PUBLIC_HTTPS_PORT:-443}:443
+    volumes:
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      - edge
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "http://127.0.0.1:2019/config/"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+    mem_limit: 256m
+    cpus: 0.5
+    stop_grace_period: 20s
+    security_opt:
+      - no-new-privileges:true
+    logging: *service-logging
+
+  backup:
+    image: ${BACKUP_IMAGE_REPOSITORY:-qinglang-backup}:${INFRA_IMAGE_TAG:?INFRA_IMAGE_TAG is required}
+    build:
+      context: .
+      dockerfile: ops/postgres/Dockerfile
+      target: backup
+    restart: unless-stopped
+    environment:
+      BACKUP_DATABASE_URL_FILE: /run/secrets/backup_database_url
+      BACKUP_DIR_CONTAINER: /backups
+      BACKUP_INTERVAL_SECONDS: ${BACKUP_INTERVAL_SECONDS:-86400}
+      BACKUP_RETRY_SECONDS: ${BACKUP_RETRY_SECONDS:-300}
+      BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-14}
+      TZ: UTC
+    secrets:
+      - backup_database_url
+    volumes:
+      - ${BACKUP_DIR:?BACKUP_DIR is required}:/backups
+    group_add:
+      - ${BACKUP_SHARED_GID:-2000}
+    networks:
+      - data
+    depends_on:
+      postgres:
+        condition: service_healthy
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    cap_drop:
+      - ALL
+    mem_limit: 512m
+    cpus: 0.5
+    stop_grace_period: 20s
+    security_opt:
+      - no-new-privileges:true
+    logging: *service-logging
+
+  restore-tool:
+    image: ${BACKUP_IMAGE_REPOSITORY:-qinglang-backup}:${INFRA_IMAGE_TAG:?INFRA_IMAGE_TAG is required}
+    profiles:
+      - tools
+    entrypoint:
+      - /usr/local/bin/qinglang-verify-restore
+    environment:
+      POSTGRES_ADMIN_PASSWORD_FILE: /run/secrets/postgres_admin_password
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      POSTGRES_ADMIN_USER: ${POSTGRES_ADMIN_USER:-qinglang_admin}
+    secrets:
+      - postgres_admin_password
+    volumes:
+      - ${BACKUP_DIR:?BACKUP_DIR is required}:/backups:ro
+    group_add:
+      - ${BACKUP_SHARED_GID:-2000}
+    networks:
+      - data
+    depends_on:
+      postgres:
+        condition: service_healthy
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    cap_drop:
+      - ALL
+    mem_limit: 512m
+    cpus: 0.5
+    security_opt:
+      - no-new-privileges:true
+    logging: *service-logging
+
+  monitor:
+    image: ${API_IMAGE_REPOSITORY:-qinglang-api}:${IMAGE_TAG:?IMAGE_TAG is required}
+    restart: unless-stopped
+    init: true
+    command:
+      - node
+      - scripts/production-monitor.mjs
+    environment:
+      <<: *api-environment
+      ALERT_WEBHOOK_URL_FILE: /run/secrets/alert_webhook_url
+      MONITOR_API_URL: http://api:3001/v1/health/ready
+      MONITOR_BACKUP_DIR: /backups
+      MONITOR_INTERVAL_SECONDS: ${MONITOR_INTERVAL_SECONDS:-30}
+      MONITOR_FAILURE_THRESHOLD: ${MONITOR_FAILURE_THRESHOLD:-3}
+      BACKUP_MAX_AGE_SECONDS: ${BACKUP_MAX_AGE_SECONDS:-93600}
+    secrets:
+      - database_url
+      - reauth_proof_secret
+      - invitation_token_secret
+      - model_api_key
+      - alert_webhook_url
+    volumes:
+      - ${BACKUP_DIR:?BACKUP_DIR is required}:/backups:ro
+    group_add:
+      - ${BACKUP_SHARED_GID:-2000}
+    networks:
+      - edge
+      - data
+    depends_on:
+      api:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    read_only: true
+    tmpfs:
+      - /tmp:size=32m,mode=1777
+    cap_drop:
+      - ALL
+    mem_limit: 256m
+    cpus: 0.25
+    stop_grace_period: 20s
+    security_opt:
+      - no-new-privileges:true
+    logging: *service-logging
+
+networks:
+  edge:
+  data:
+    internal: true
+
+volumes:
+  postgres_data:
+  caddy_data:
+  caddy_config:
+
+secrets:
+  postgres_admin_password:
+    file: ${POSTGRES_ADMIN_PASSWORD_FILE:?POSTGRES_ADMIN_PASSWORD_FILE is required}
+  postgres_migrator_password:
+    file: ${POSTGRES_MIGRATOR_PASSWORD_FILE:?POSTGRES_MIGRATOR_PASSWORD_FILE is required}
+  postgres_app_password:
+    file: ${POSTGRES_APP_PASSWORD_FILE:?POSTGRES_APP_PASSWORD_FILE is required}
+  postgres_backup_password:
+    file: ${POSTGRES_BACKUP_PASSWORD_FILE:?POSTGRES_BACKUP_PASSWORD_FILE is required}
+  database_url:
+    file: ${DATABASE_URL_FILE:?DATABASE_URL_FILE is required}
+  migration_database_url:
+    file: ${MIGRATION_DATABASE_URL_FILE:?MIGRATION_DATABASE_URL_FILE is required}
+  backup_database_url:
+    file: ${BACKUP_DATABASE_URL_FILE:?BACKUP_DATABASE_URL_FILE is required}
+  reauth_proof_secret:
+    file: ${REAUTH_PROOF_SECRET_FILE:?REAUTH_PROOF_SECRET_FILE is required}
+  invitation_token_secret:
+    file: ${INVITATION_TOKEN_SECRET_FILE:?INVITATION_TOKEN_SECRET_FILE is required}
+  model_api_key:
+    file: ${MODEL_API_KEY_FILE:?MODEL_API_KEY_FILE is required}
+  alert_webhook_url:
+    file: ${ALERT_WEBHOOK_URL_FILE:?ALERT_WEBHOOK_URL_FILE is required}
