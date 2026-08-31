@@ -1,0 +1,27 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "allowImportingTsExtensions": false,
+    "declaration": false,
+    "declarationMap": false,
+    "incremental": false,
+    "jsx": "react-jsx",
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "noEmit": true,
+    "baseUrl": ".",
+    "paths": {
+      "#practice-demo-provider": ["src/features/course-materials/practice/practice-demo-provider.dev.ts"],
+      "#lesson-summary-provider": ["src/features/course-materials/lesson-summary/lesson-summary-provider.dev.ts"],
+      "#lesson-complete-provider": ["src/features/course-materials/lesson-complete/lesson-complete-provider.dev.ts"],
+      "#student-home-demo-provider": ["src/features/student-home/student-home-demo-provider.dev.ts"],
+      "#task-detail-provider": ["src/features/student-home/task-detail/task-detail-provider.dev.ts"],
+      "#learning-plans-provider": ["src/features/student-home/learning-plans/learning-plans-provider.dev.ts"],
+      "#course-catalog-demo-provider": ["src/features/course-materials/course-catalog-demo-provider.dev.ts"],
+      "#knowledge-intro-provider": ["src/features/course-materials/knowledge-intro/knowledge-intro-provider.dev.ts"]
+    },
+    "types": ["vite/client", "vitest/globals", "@testing-library/jest-dom"]
+  },
+  "include": ["src", "vite.config.ts"]
+}

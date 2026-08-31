@@ -1,0 +1,52 @@
+node_modules/
+.pnpm-store/
+dist/
+dist-*/
+**/dist/
+**/dist-*/
+coverage/
+*.log
+*.tsbuildinfo
+.env
+.env.*
+!.env.example
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+docker-data/
+apps/api/src/generated/prisma/
+.codegraph/
+.codex/
+.superpowers/
+.omo/
+qa/
+Design Files/
+docs/
+data/
+tmp/
+vendor/
+%SystemDrive%/
+
+# Local project instructions and generated QA reports stay outside the public repository.
+*.md
+!README.md
+
+# Browser automation profiles can contain cookies, sessions, history, and local storage.
+**/chrome-profile*/
+**/edge-*-profile/
+**/Network/
+**/Local Storage/
+**/Session Storage/
+**/Cookies
+**/Device Bound Sessions
+**/Login Data
+**/History
+**/Web Data
+**/Secure Preferences
+*.har
+*.dump
+*.bak
+*.db
+*.sqlite
+*.sqlite3
