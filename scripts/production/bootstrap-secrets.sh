@@ -43,6 +43,7 @@ BACKUP_DATABASE_URL_FILE
 REAUTH_PROOF_SECRET_FILE
 INVITATION_TOKEN_SECRET_FILE
 MODEL_API_KEY_FILE
+OBJECT_STORAGE_SECRET_ACCESS_KEY_FILE
 ALERT_WEBHOOK_URL_FILE
 "
 
@@ -90,6 +91,7 @@ write_secret_once "$BACKUP_DATABASE_URL_FILE" \
 write_secret_once "$REAUTH_PROOF_SECRET_FILE" "$(openssl rand -hex 48)"
 write_secret_once "$INVITATION_TOKEN_SECRET_FILE" "$(openssl rand -hex 48)"
 write_secret_once "$MODEL_API_KEY_FILE" ""
+write_secret_once "$OBJECT_STORAGE_SECRET_ACCESS_KEY_FILE" ""
 write_secret_once "$ALERT_WEBHOOK_URL_FILE" ""
 
 install -d -m 2750 "$BACKUP_DIR"
@@ -105,4 +107,5 @@ done
 
 printf '%s\n' "Production secrets were initialized without printing their values."
 printf '%s\n' "Configure MODEL_API_KEY_FILE only when MODEL_PROVIDER=openai-compatible."
+printf '%s\n' "Configure OBJECT_STORAGE_SECRET_ACCESS_KEY_FILE only with the least-privilege bucket credential."
 printf '%s\n' "Configure ALERT_WEBHOOK_URL_FILE with an HTTPS webhook to enable remote alerts."

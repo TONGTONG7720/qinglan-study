@@ -17,7 +17,7 @@ jobs:
   quality:
     name: quality
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 60
     services:
       postgres:
         image: pgvector/pgvector:0.8.6-pg18-trixie
@@ -64,6 +64,11 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Start private-object test infrastructure
+        run: |
+          docker compose -f compose.ocr-e2e.yaml up -d --wait --wait-timeout 300 minio clamav
+          docker compose -f compose.ocr-e2e.yaml run --rm minio-init
+
       - name: Apply database migrations
         run: pnpm --filter @study/api prisma:migrate:deploy
 
@@ -92,3 +97,7 @@ jobs:
           docker build --file apps/web/Dockerfile --target gateway --tag qinglang-gateway:ci .
           docker build --file ops/postgres/Dockerfile --target database --tag qinglang-postgres:ci .
           docker build --file ops/postgres/Dockerfile --target backup --tag qinglang-backup:ci .
+
+      - name: Stop private-object test infrastructure
+        if: always()
+        run: docker compose -f compose.ocr-e2e.yaml down --volumes --remove-orphans

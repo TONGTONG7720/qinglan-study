@@ -37,6 +37,7 @@ load_required_secret DATABASE_URL "${DATABASE_URL_FILE:-}"
 load_required_secret REAUTH_PROOF_SECRET "${REAUTH_PROOF_SECRET_FILE:-}"
 load_required_secret INVITATION_TOKEN_SECRET "${INVITATION_TOKEN_SECRET_FILE:-}"
 load_optional_secret MODEL_API_KEY "${MODEL_API_KEY_FILE:-}"
+load_optional_secret OBJECT_STORAGE_SECRET_ACCESS_KEY "${OBJECT_STORAGE_SECRET_ACCESS_KEY_FILE:-}"
 load_optional_secret ALERT_WEBHOOK_URL "${ALERT_WEBHOOK_URL_FILE:-}"
 
 exec "$@"

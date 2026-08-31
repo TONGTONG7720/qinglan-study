@@ -18,11 +18,60 @@ export const CreatePrivateObjectInputSchema = z.object({
 }).strict().refine((value) => value.width * value.height <= 40_000_000);
 export type CreatePrivateObjectInput = z.infer<typeof CreatePrivateObjectInputSchema>;
 
+export const PrivateObjectStatusSchema = z.enum([
+  "PENDING_UPLOAD",
+  "VERIFYING",
+  "READY",
+  "QUARANTINED",
+  "DELETE_PENDING",
+  "DELETE_FAILED",
+  "DELETED",
+]);
+
+export const PrivateObjectUploadGrantSchema = z.object({
+  method: z.literal("PUT"),
+  url: z.url(),
+  headers: z.record(z.string(), z.string()),
+  expiresAt: z.iso.datetime(),
+}).strict();
+
 export const PrivateObjectResponseSchema = z.object({
-  id: z.uuid(), ownerStudentUserId: z.uuid(), mimeType: z.string(), sizeBytes: z.number().int(),
-  storageKey: z.string(), uploadUrl: z.string(), expiresAt: z.iso.datetime(),
+  id: z.uuid(),
+  ownerStudentUserId: z.uuid(),
+  mimeType: z.enum(["image/jpeg", "image/png", "image/webp"]),
+  sizeBytes: z.number().int().positive(),
+  width: z.number().int().positive(),
+  height: z.number().int().positive(),
+  status: PrivateObjectStatusSchema,
+  upload: PrivateObjectUploadGrantSchema.nullable(),
+  errorCode: z.string().nullable(),
+  expiresAt: z.iso.datetime(),
+  deletedAt: z.iso.datetime().nullable(),
 }).strict();
 export type PrivateObjectResponse = z.infer<typeof PrivateObjectResponseSchema>;
+
+export const PrivateObjectReadGrantResponseSchema = z.object({
+  objectId: z.uuid(),
+  url: z.url(),
+  expiresAt: z.iso.datetime(),
+}).strict();
+export type PrivateObjectReadGrantResponse = z.infer<typeof PrivateObjectReadGrantResponseSchema>;
+
+export const CreatePrivateObjectReadGrantInputSchema = z.object({
+  confirmation: z.literal("READ_PRIVATE_OBJECT"),
+}).strict();
+
+export const CompletePrivateObjectUploadInputSchema = z.object({
+  confirmation: z.literal("COMPLETE_PRIVATE_OBJECT_UPLOAD"),
+}).strict();
+
+export const RetryPrivateObjectUploadInputSchema = z.object({
+  confirmation: z.literal("RETRY_PRIVATE_OBJECT_UPLOAD"),
+}).strict();
+
+export const DeletePrivateObjectInputSchema = z.object({
+  confirmation: z.literal("DELETE_PRIVATE_OBJECT"),
+}).strict();
 
 export const StartOcrInputSchema = z.object({
   objectId: z.uuid(),
@@ -35,7 +84,12 @@ export const ConfirmOcrInputSchema = z.object({
 }).strict();
 export type ConfirmOcrInput = z.infer<typeof ConfirmOcrInputSchema>;
 
+export const RetryOcrInputSchema = z.object({
+  confirmation: z.literal("RETRY_OCR"),
+}).strict();
+
 export const OcrResultSchema = z.discriminatedUnion("status", [
+  z.object({ questionId: z.uuid(), status: z.literal("OCR_PENDING"), attemptCount: z.number().int().nonnegative() }).strict(),
   z.object({ questionId: z.uuid(), status: z.literal("OCR_REVIEW"), text: z.string(), confidence: z.number().min(0).max(1) }).strict(),
   z.object({ questionId: z.uuid(), status: z.literal("READY"), text: z.string(), confidence: z.number().min(0).max(1) }).strict(),
   z.object({ questionId: z.uuid(), status: z.literal("FAILED"), errorCode: z.string() }).strict(),

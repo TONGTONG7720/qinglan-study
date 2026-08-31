@@ -1,5 +1,15 @@
-import { ConfirmOcrInputSchema, CreatePrivateObjectInputSchema, SetFamilyAiBudgetInputSchema, StartOcrInputSchema } from "@study/contracts";
-import type { CurrentUser, OcrResult, PrivateObjectResponse } from "@study/contracts";
+import {
+  CompletePrivateObjectUploadInputSchema,
+  ConfirmOcrInputSchema,
+  CreatePrivateObjectReadGrantInputSchema,
+  CreatePrivateObjectInputSchema,
+  DeletePrivateObjectInputSchema,
+  RetryOcrInputSchema,
+  RetryPrivateObjectUploadInputSchema,
+  SetFamilyAiBudgetInputSchema,
+  StartOcrInputSchema,
+} from "@study/contracts";
+import type { CurrentUser, OcrResult, PrivateObjectReadGrantResponse, PrivateObjectResponse } from "@study/contracts";
 import { BadRequestException, Body, Controller, Get, Param, Post, Req, UnauthorizedException } from "@nestjs/common";
 import type { Request } from "express";
 import { z } from "zod";
@@ -22,16 +32,46 @@ export class AiController {
 
   @Post("students/:studentId/private-objects/presign")
   async object(@Req() request: Request, @Param("studentId") studentId: string, @Body() body: unknown): Promise<PrivateObjectResponse> {
-    return this.ocr.createObject(await this.writeActor(request), this.uuid(studentId), this.parse(CreatePrivateObjectInputSchema, body));
+    return this.ocr.createObject(
+      await this.writeActor(request),
+      this.uuid(studentId),
+      this.parse(CreatePrivateObjectInputSchema, body),
+      readIdempotencyKey(request),
+    );
   }
   @Get("private-objects/:objectId")
   async getObject(@Req() request: Request, @Param("objectId") objectId: string): Promise<PrivateObjectResponse> { return this.ocr.getObject(await this.readActor(request), this.uuid(objectId)); }
+  @Post("private-objects/:objectId/presign-read")
+  async readGrant(@Req() request: Request, @Param("objectId") objectId: string, @Body() body: unknown): Promise<PrivateObjectReadGrantResponse> {
+    this.parse(CreatePrivateObjectReadGrantInputSchema, body);
+    return this.ocr.createReadGrant(await this.writeActor(request), this.uuid(objectId));
+  }
+  @Post("private-objects/:objectId/complete")
+  async completeObject(@Req() request: Request, @Param("objectId") objectId: string, @Body() body: unknown): Promise<PrivateObjectResponse> {
+    this.parse(CompletePrivateObjectUploadInputSchema, body);
+    return this.ocr.completeObject(await this.writeActor(request), this.uuid(objectId));
+  }
+  @Post("private-objects/:objectId/retry-upload")
+  async retryObjectUpload(@Req() request: Request, @Param("objectId") objectId: string, @Body() body: unknown): Promise<PrivateObjectResponse> {
+    this.parse(RetryPrivateObjectUploadInputSchema, body);
+    return this.ocr.retryObjectUpload(await this.writeActor(request), this.uuid(objectId));
+  }
+  @Post("private-objects/:objectId/delete")
+  async deleteObject(@Req() request: Request, @Param("objectId") objectId: string, @Body() body: unknown): Promise<PrivateObjectResponse> {
+    this.parse(DeletePrivateObjectInputSchema, body);
+    return this.ocr.deleteObject(await this.writeActor(request), this.uuid(objectId));
+  }
   @Post("students/:studentId/questions/ocr")
   async start(@Req() request: Request, @Param("studentId") studentId: string, @Body() body: unknown): Promise<OcrResult> {
     const input = this.parse(StartOcrInputSchema, body); return this.ocr.start(await this.writeActor(request), this.uuid(studentId), input.objectId);
   }
   @Post("questions/:questionId/confirm-ocr")
   async confirm(@Req() request: Request, @Param("questionId") id: string, @Body() body: unknown): Promise<OcrResult> { return this.ocr.confirm(await this.writeActor(request), this.uuid(id), this.parse(ConfirmOcrInputSchema, body)); }
+  @Post("questions/:questionId/retry-ocr")
+  async retryOcr(@Req() request: Request, @Param("questionId") id: string, @Body() body: unknown): Promise<OcrResult> {
+    this.parse(RetryOcrInputSchema, body);
+    return this.ocr.retry(await this.writeActor(request), this.uuid(id));
+  }
   @Get("questions/:questionId")
   async get(@Req() request: Request, @Param("questionId") id: string): Promise<OcrResult> { return this.ocr.getQuestion(await this.readActor(request), this.uuid(id)); }
   private async readActor(request: Request): Promise<CurrentUser> { return this.auth.resolve(readSessionCookie(request)); }

@@ -24,7 +24,9 @@ export class DeterministicFakeProvider implements ModelProvider {
 
   call(request: ModelGatewayRequest): Promise<ModelGatewayResult> {
     const sha = typeof request.input.sha256 === "string" ? request.input.sha256 : "";
-    if (sha.startsWith("f")) return Promise.reject(new Error("FAKE_PROVIDER_FAILURE"));
+    if (sha.startsWith("f") && request.dedupeKey.endsWith("attempt:1")) {
+      return Promise.reject(new Error("FAKE_PROVIDER_FAILURE"));
+    }
     const confidence = sha.startsWith("a") ? 0.6 : 0.95;
     const output = request.purpose === "TUTOR_FAST" || request.purpose === "TUTOR_REASONING"
       ? { text: "请继续基于审核证据完成当前步骤。" }

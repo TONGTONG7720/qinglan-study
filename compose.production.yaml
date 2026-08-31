@@ -21,18 +21,32 @@ x-api-environment: &api-environment
   VITE_RELEASE_SCOPE: ${VITE_RELEASE_SCOPE:?VITE_RELEASE_SCOPE is required}
   MODEL_PROVIDER: ${MODEL_PROVIDER:?MODEL_PROVIDER is required}
   OBJECT_STORAGE_PROVIDER: ${OBJECT_STORAGE_PROVIDER:?OBJECT_STORAGE_PROVIDER is required}
+  OBJECT_SCAN_PROVIDER: ${OBJECT_SCAN_PROVIDER:?OBJECT_SCAN_PROVIDER is required}
   EMAIL_PROVIDER: ${EMAIL_PROVIDER:?EMAIL_PROVIDER is required}
   MODEL_BASE_URL: ${MODEL_BASE_URL:-}
   MODEL_NAME: ${MODEL_NAME:-}
   MODEL_REASONING_EFFORT: ${MODEL_REASONING_EFFORT:-medium}
   MODEL_TIMEOUT_MS: ${MODEL_TIMEOUT_MS:-60000}
   MODEL_COST_FEN_PER_CALL: ${MODEL_COST_FEN_PER_CALL:-10}
+  OBJECT_STORAGE_ENDPOINT: ${OBJECT_STORAGE_ENDPOINT:-}
+  OBJECT_STORAGE_REGION: ${OBJECT_STORAGE_REGION:-}
+  OBJECT_STORAGE_BUCKET: ${OBJECT_STORAGE_BUCKET:-}
+  OBJECT_STORAGE_ACCESS_KEY_ID: ${OBJECT_STORAGE_ACCESS_KEY_ID:-}
+  OBJECT_STORAGE_FORCE_PATH_STYLE: ${OBJECT_STORAGE_FORCE_PATH_STYLE:-}
+  OBJECT_STORAGE_UPLOAD_TTL_SECONDS: ${OBJECT_STORAGE_UPLOAD_TTL_SECONDS:-}
+  OBJECT_STORAGE_READ_TTL_SECONDS: ${OBJECT_STORAGE_READ_TTL_SECONDS:-}
+  OBJECT_STORAGE_RETENTION_DAYS: ${OBJECT_STORAGE_RETENTION_DAYS:-}
+  OBJECT_STORAGE_SSE: ${OBJECT_STORAGE_SSE:-}
+  CLAMAV_HOST: ${CLAMAV_HOST:-}
+  CLAMAV_PORT: ${CLAMAV_PORT:-}
+  CLAMAV_TIMEOUT_MS: ${CLAMAV_TIMEOUT_MS:-}
   PRODUCTION_SMOKE_TEST: ${PRODUCTION_SMOKE_TEST:-false}
   DATABASE_URL_FILE: /run/secrets/database_url
   REAUTH_PROOF_SECRET_FILE: /run/secrets/reauth_proof_secret
   INVITATION_TOKEN_SECRET_FILE: /run/secrets/invitation_token_secret
   EXPECTED_MIGRATION_NAME: ${EXPECTED_MIGRATION_NAME:?EXPECTED_MIGRATION_NAME is required}
   MODEL_API_KEY_FILE: /run/secrets/model_api_key
+  OBJECT_STORAGE_SECRET_ACCESS_KEY_FILE: /run/secrets/object_storage_secret_access_key
 
 services:
   postgres:
@@ -115,6 +129,7 @@ services:
       - reauth_proof_secret
       - invitation_token_secret
       - model_api_key
+      - object_storage_secret_access_key
     networks:
       - data
     depends_on:
@@ -143,6 +158,7 @@ services:
       - reauth_proof_secret
       - invitation_token_secret
       - model_api_key
+      - object_storage_secret_access_key
     networks:
       - edge
       - data
@@ -167,6 +183,31 @@ services:
     mem_limit: 768m
     cpus: 1.0
     stop_grace_period: 20s
+    security_opt:
+      - no-new-privileges:true
+    logging: *service-logging
+
+  malware-scanner:
+    image: ${CLAMAV_IMAGE:-clamav/clamav:1.4.3@sha256:75fb5fd95fcbe1d7e6d240c369c1572b686ee2c95949d1042b5148de8eddebb4}
+    profiles:
+      - ocr
+    restart: unless-stopped
+    expose:
+      - "3310"
+    volumes:
+      - clamav_database:/var/lib/clamav
+    networks:
+      - data
+      - scanner-egress
+    healthcheck:
+      test: ["CMD", "clamdscan", "--ping=10"]
+      interval: 30s
+      timeout: 15s
+      retries: 10
+      start_period: 180s
+    mem_limit: 3g
+    cpus: 1.0
+    stop_grace_period: 30s
     security_opt:
       - no-new-privileges:true
     logging: *service-logging
@@ -303,6 +344,7 @@ services:
       - reauth_proof_secret
       - invitation_token_secret
       - model_api_key
+      - object_storage_secret_access_key
       - alert_webhook_url
     volumes:
       - ${BACKUP_DIR:?BACKUP_DIR is required}:/backups:ro
@@ -332,11 +374,13 @@ networks:
   edge:
   data:
     internal: true
+  scanner-egress:
 
 volumes:
   postgres_data:
   caddy_data:
   caddy_config:
+  clamav_database:
 
 secrets:
   postgres_admin_password:
@@ -359,5 +403,7 @@ secrets:
     file: ${INVITATION_TOKEN_SECRET_FILE:?INVITATION_TOKEN_SECRET_FILE is required}
   model_api_key:
     file: ${MODEL_API_KEY_FILE:?MODEL_API_KEY_FILE is required}
+  object_storage_secret_access_key:
+    file: ${OBJECT_STORAGE_SECRET_ACCESS_KEY_FILE:?OBJECT_STORAGE_SECRET_ACCESS_KEY_FILE is required}
   alert_webhook_url:
     file: ${ALERT_WEBHOOK_URL_FILE:?ALERT_WEBHOOK_URL_FILE is required}

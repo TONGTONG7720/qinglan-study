@@ -26,6 +26,7 @@ function productionEnvironment(): NodeJS.ProcessEnv {
     VITE_RELEASE_SCOPE: "READ_ONLY_BETA",
     MODEL_PROVIDER: "disabled",
     OBJECT_STORAGE_PROVIDER: "disabled",
+    OBJECT_SCAN_PROVIDER: "disabled",
     EMAIL_PROVIDER: "disabled",
   };
 }
@@ -41,6 +42,7 @@ describe("readAppConfig", () => {
       CSRF_PROTECTION_ENABLED: false,
       MODEL_PROVIDER: "disabled",
       OBJECT_STORAGE_PROVIDER: "disabled",
+      OBJECT_SCAN_PROVIDER: "disabled",
       EMAIL_PROVIDER: "disabled",
       ALLOWED_ORIGINS: ["http://127.0.0.1:3000"],
     });
@@ -62,6 +64,7 @@ describe("readAppConfig", () => {
       CSRF_PROTECTION_ENABLED: true,
       MODEL_PROVIDER: "disabled",
       OBJECT_STORAGE_PROVIDER: "disabled",
+      OBJECT_SCAN_PROVIDER: "disabled",
       EMAIL_PROVIDER: "disabled",
       ALLOWED_ORIGINS: ["https://study.example.com"],
     });
@@ -84,6 +87,7 @@ describe("readAppConfig", () => {
     "VITE_RELEASE_SCOPE",
     "MODEL_PROVIDER",
     "OBJECT_STORAGE_PROVIDER",
+    "OBJECT_SCAN_PROVIDER",
     "EMAIL_PROVIDER",
   ])("rejects missing production key %s", (key) => {
     const environment = productionEnvironment();
@@ -166,5 +170,61 @@ describe("readAppConfig", () => {
       ...productionEnvironment(),
       SMTP_HOST: "smtp.provider.test",
     })).toThrow();
+  });
+
+  it("requires a complete encrypted S3 and ClamAV configuration when uploads are enabled", () => {
+    const enabledEnvironment: NodeJS.ProcessEnv = {
+      ...productionEnvironment(),
+      OBJECT_STORAGE_PROVIDER: "s3",
+      OBJECT_SCAN_PROVIDER: "clamav",
+      OBJECT_STORAGE_ENDPOINT: "https://objects.provider.test",
+      OBJECT_STORAGE_REGION: "cn-south-1",
+      OBJECT_STORAGE_BUCKET: "qinglang-private-production",
+      OBJECT_STORAGE_ACCESS_KEY_ID: "qinglang-private-object-service",
+      OBJECT_STORAGE_SECRET_ACCESS_KEY: "S8mQ2vN9xP4rL6cW3hT5yJ1fG7bZ0sD",
+      OBJECT_STORAGE_FORCE_PATH_STYLE: "false",
+      OBJECT_STORAGE_UPLOAD_TTL_SECONDS: "300",
+      OBJECT_STORAGE_READ_TTL_SECONDS: "120",
+      OBJECT_STORAGE_RETENTION_DAYS: "30",
+      OBJECT_STORAGE_SSE: "AES256",
+      CLAMAV_HOST: "malware-scanner",
+      CLAMAV_PORT: "3310",
+      CLAMAV_TIMEOUT_MS: "30000",
+    };
+    expect(readAppConfig(enabledEnvironment)).toMatchObject({
+      OBJECT_STORAGE_PROVIDER: "s3",
+      OBJECT_SCAN_PROVIDER: "clamav",
+    });
+    for (const key of [
+      "OBJECT_STORAGE_ENDPOINT",
+      "OBJECT_STORAGE_REGION",
+      "OBJECT_STORAGE_BUCKET",
+      "OBJECT_STORAGE_ACCESS_KEY_ID",
+      "OBJECT_STORAGE_SECRET_ACCESS_KEY",
+      "OBJECT_STORAGE_FORCE_PATH_STYLE",
+      "OBJECT_STORAGE_UPLOAD_TTL_SECONDS",
+      "OBJECT_STORAGE_READ_TTL_SECONDS",
+      "OBJECT_STORAGE_RETENTION_DAYS",
+      "OBJECT_STORAGE_SSE",
+      "CLAMAV_HOST",
+      "CLAMAV_PORT",
+      "CLAMAV_TIMEOUT_MS",
+    ]) {
+      const missing = { ...enabledEnvironment };
+      Reflect.deleteProperty(missing, key);
+      expect(() => readAppConfig(missing)).toThrow();
+    }
+    expect(() => readAppConfig({
+      ...enabledEnvironment,
+      OBJECT_STORAGE_ENDPOINT: "http://objects.provider.test",
+    })).toThrow("OBJECT_STORAGE_ENDPOINT must use HTTPS");
+    expect(() => readAppConfig({
+      ...enabledEnvironment,
+      OBJECT_STORAGE_SSE: "none",
+    })).toThrow("production object storage must use AES256");
+    expect(() => readAppConfig({
+      ...enabledEnvironment,
+      CLAMAV_HOST: "scanner.public.example",
+    })).toThrow("CLAMAV_HOST must remain on the private deployment network");
   });
 });

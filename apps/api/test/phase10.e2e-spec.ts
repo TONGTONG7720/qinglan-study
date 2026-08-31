@@ -31,7 +31,8 @@ describe("Phase 10 privacy deletion, retention jobs and safety", () => {
       await tx.guardianStudentRelation.create({ data: { familyId: family.id, guardianUserId: member.id, studentUserId: student.id } });
       const deleteFamily = await tx.family.create({ data: { name: "Phase 10 Delete Family", memberships: { create: [{ userId: deleteOwner.id, role: "GUARDIAN", accessLevel: "OWNER" }, { userId: deleteStudent.id, role: "STUDENT" }] }, studentProfiles: { create: { userId: deleteStudent.id, grade: 8 } } } });
       await tx.modelCall.create({ data: { userId: student.id, purpose: "TUTOR_FAST", dedupeKey: "phase10-secret-output", provider: "fake", status: "FAILED", errorCode: "FAIL", output: { promptText: "secret-provider-payload" } } });
-      await tx.privateObject.create({ data: { ownerStudentUserId: student.id, storageKey: "private/phase10-secret-key", mimeType: "image/png", sizeBytes: 10, width: 32, height: 32, sha256: "a".repeat(64), expiresAt: new Date(Date.now() + 60_000) } });
+      const verifiedAt = new Date();
+      await tx.privateObject.create({ data: { ownerStudentUserId: student.id, dedupeKey: "b".repeat(64), storageKey: "private/phase10-secret-key", mimeType: "image/png", sizeBytes: 10, width: 32, height: 32, sha256: "a".repeat(64), status: "READY", scanStatus: "CLEAN", scanPassed: true, verifiedAt, scanCompletedAt: verifiedAt, storageETag: "phase10-fixture-etag", expiresAt: new Date(Date.now() + 60_000) } });
       return { family, deleteFamily, student, member, deleteStudent };
     });
     familyId = fixture.family.id; deleteFamilyId = fixture.deleteFamily.id; studentId = fixture.student.id; memberId = fixture.member.id; deleteStudentId = fixture.deleteStudent.id;
@@ -87,7 +88,7 @@ describe("Phase 10 privacy deletion, retention jobs and safety", () => {
     const families = await prisma.family.findMany({ where: { name: { startsWith: "Phase 10" } }, select: { id: true } }); const familyIds = families.map((family) => family.id);
     const requests = await prisma.deletionRequest.findMany({ where: { OR: [{ familyId: { in: familyIds } }, { requestedByUserId: { in: ids } }] }, select: { id: true } }); const requestIds = requests.map((request) => request.id);
     const exports = await prisma.familyExportRequest.findMany({ where: { OR: [{ familyId: { in: familyIds } }, { requestedByUserId: { in: ids } }] }, select: { id: true } });
-    await prisma.retentionJob.deleteMany({ where: { OR: [{ dedupeKey: "phase10-malformed" }, { dedupeKey: { in: [...requestIds.map((id) => `personal:${id}`), ...requestIds.map((id) => `family:${id}`), ...exports.map((item) => `export:${item.id}`)] } }] } });
+    await prisma.retentionJob.deleteMany({ where: { OR: [{ dedupeKey: "phase10-malformed" }, { dedupeKey: { startsWith: "private-object:" } }, { dedupeKey: { in: [...requestIds.map((id) => `personal:${id}`), ...requestIds.map((id) => `family:${id}`), ...exports.map((item) => `export:${item.id}`)] } }] } });
     await prisma.deletionRequest.deleteMany({ where: { id: { in: requestIds } } }); await prisma.familyExportRequest.deleteMany({ where: { id: { in: exports.map((item) => item.id) } } });
     await prisma.auditEvent.deleteMany({ where: { actorUserId: { in: ids } } }); await prisma.operation.deleteMany({ where: { userId: { in: ids } } }); await prisma.family.deleteMany({ where: { id: { in: familyIds } } }); await prisma.user.deleteMany({ where: { id: { in: ids } } });
   }
