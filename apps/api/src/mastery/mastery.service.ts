@@ -23,6 +23,9 @@ import { IdempotencyService } from "../common/operations/idempotency.service.js"
 import { PrismaService } from "../common/prisma/prisma.service.js";
 
 const acceptedConfidence = 0.7;
+const concurrentInsertReadAttempts = 5;
+const concurrentInsertReadBaseDelayMs = 10;
+const concurrentInsertReadMaxDelayMs = 100;
 
 function notFound(): never {
   throw new NotFoundException();
@@ -30,6 +33,18 @@ function notFound(): never {
 
 function uniqueConflict(error: unknown): boolean {
   return typeof error === "object" && error !== null && "code" in error && error.code === "P2002";
+}
+
+function serializableConflict(error: unknown): boolean {
+  return (
+    (typeof error === "object" && error !== null && "code" in error && error.code === "P2034")
+    || String(error).includes("TransactionWriteConflict")
+    || String(error).includes("write conflict or a deadlock")
+  );
+}
+
+function delay(durationMs: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, durationMs));
 }
 
 @Injectable()
@@ -200,7 +215,7 @@ export class MasteryService {
         },
       });
     } catch (error) {
-      if (!uniqueConflict(error)) throw error;
+      if (!uniqueConflict(error) && !serializableConflict(error)) throw error;
       return this.resultAfterConcurrentInsert(studentUserId, input);
     }
   }
@@ -362,13 +377,61 @@ export class MasteryService {
     studentUserId: string,
     input: MasteryEvidenceInput,
   ): Promise<MasteryEvidenceResult> {
-    return this.prisma.$transaction(async (transaction) => {
-      const existing = await transaction.masteryEvidence.findUnique({
-        where: { sourceAttemptId: input.sourceAttemptId },
-      });
-      if (existing === null) throw new ConflictException();
-      return this.resolveExistingEvidence(transaction, existing, studentUserId, input);
-    }, { isolationLevel: "Serializable" });
+    for (let attempt = 1; attempt <= concurrentInsertReadAttempts; attempt += 1) {
+      try {
+        const result = await this.prisma.$transaction(async (transaction) => {
+          const existing = await transaction.masteryEvidence.findUnique({
+            where: { sourceAttemptId: input.sourceAttemptId },
+          });
+          if (existing === null) return null;
+          if (this.sameEvidence(existing, studentUserId, input)) {
+            return this.resultForCommittedEvidence(transaction, existing);
+          }
+          return this.resolveExistingEvidence(transaction, existing, studentUserId, input);
+        }, { isolationLevel: "ReadCommitted" });
+        if (result !== null) return result;
+      } catch (error) {
+        if (!serializableConflict(error) || attempt === concurrentInsertReadAttempts) throw error;
+      }
+      if (attempt < concurrentInsertReadAttempts) {
+        const exponentialDelay = Math.min(
+          concurrentInsertReadMaxDelayMs,
+          concurrentInsertReadBaseDelayMs * 2 ** (attempt - 1),
+        );
+        await delay(exponentialDelay);
+      }
+    }
+    throw new ConflictException();
+  }
+
+  private async resultForCommittedEvidence(
+    transaction: Prisma.TransactionClient,
+    evidence: {
+      id: string;
+      studentUserId: string;
+      subjectCode: SubjectCode;
+      scopeKey: string;
+      status: "ACCEPTED" | "REVIEW_REQUIRED";
+    },
+  ): Promise<MasteryEvidenceResult> {
+    if (evidence.status === "REVIEW_REQUIRED") {
+      return MasteryEvidenceResultSchema.parse({ status: evidence.status, evidenceId: evidence.id, state: null });
+    }
+    const state = await transaction.masteryState.findUnique({
+      where: {
+        studentUserId_subjectCode_scopeKey: {
+          studentUserId: evidence.studentUserId,
+          subjectCode: evidence.subjectCode,
+          scopeKey: evidence.scopeKey,
+        },
+      },
+    });
+    if (state === null) throw new ConflictException();
+    return MasteryEvidenceResultSchema.parse({
+      status: evidence.status,
+      evidenceId: evidence.id,
+      state: this.stateResult(state),
+    });
   }
 
   private async assertActiveStudent(
