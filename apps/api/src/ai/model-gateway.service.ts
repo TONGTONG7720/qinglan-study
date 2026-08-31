@@ -37,6 +37,19 @@ export class DeterministicFakeProvider implements ModelProvider {
 }
 
 @Injectable()
+export class DisabledModelProvider implements ModelProvider {
+  readonly name = "disabled";
+
+  reservationCostFen(): number {
+    throw new ServiceUnavailableException();
+  }
+
+  call(): Promise<ModelGatewayResult> {
+    return Promise.reject(new ServiceUnavailableException());
+  }
+}
+
+@Injectable()
 export class ModelGatewayService {
   constructor(
     private readonly prisma: PrismaService,

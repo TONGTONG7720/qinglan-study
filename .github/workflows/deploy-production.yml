@@ -1,0 +1,84 @@
+name: Deploy production
+
+on:
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: Immutable 40-character commit SHA published by the release-images workflow
+        required: true
+        type: string
+      update_infra:
+        description: Explicitly update PostgreSQL and backup images to INFRA_IMAGE_TAG
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-deployment
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: deploy approved images
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: production
+
+    steps:
+      - name: Validate deployment input
+        env:
+          IMAGE_TAG: ${{ inputs.image_tag }}
+          UPDATE_INFRA: ${{ inputs.update_infra }}
+        run: |
+          if [[ ! "$IMAGE_TAG" =~ ^[0-9a-f]{40}$ ]]; then
+            printf '%s\n' "image_tag must be an immutable 40-character lowercase commit SHA" >&2
+            exit 64
+          fi
+
+      - name: Deploy through the pinned production host identity
+        env:
+          IMAGE_TAG: ${{ inputs.image_tag }}
+          UPDATE_INFRA: ${{ inputs.update_infra }}
+          SSH_HOST: ${{ secrets.PRODUCTION_SSH_HOST }}
+          SSH_PORT: ${{ secrets.PRODUCTION_SSH_PORT }}
+          SSH_USER: ${{ secrets.PRODUCTION_SSH_USER }}
+          SSH_PRIVATE_KEY: ${{ secrets.PRODUCTION_SSH_PRIVATE_KEY }}
+          SSH_KNOWN_HOSTS: ${{ secrets.PRODUCTION_SSH_KNOWN_HOSTS }}
+          DEPLOY_PATH: ${{ secrets.PRODUCTION_DEPLOY_PATH }}
+          ENV_FILE: ${{ secrets.PRODUCTION_ENV_FILE }}
+        run: |
+          set -euo pipefail
+          : "${SSH_HOST:?missing PRODUCTION_SSH_HOST}"
+          : "${SSH_USER:?missing PRODUCTION_SSH_USER}"
+          : "${SSH_PRIVATE_KEY:?missing PRODUCTION_SSH_PRIVATE_KEY}"
+          : "${SSH_KNOWN_HOSTS:?missing PRODUCTION_SSH_KNOWN_HOSTS}"
+          : "${DEPLOY_PATH:?missing PRODUCTION_DEPLOY_PATH}"
+          : "${ENV_FILE:?missing PRODUCTION_ENV_FILE}"
+
+          [[ "$DEPLOY_PATH" =~ ^/[A-Za-z0-9._/-]+$ ]]
+          [[ "$ENV_FILE" =~ ^/[A-Za-z0-9._/-]+$ ]]
+          [[ "$SSH_HOST" =~ ^[A-Za-z0-9._:-]+$ ]]
+          [[ "$SSH_USER" =~ ^[A-Za-z_][A-Za-z0-9_-]*$ ]]
+          ssh_port="${SSH_PORT:-22}"
+          [[ "$ssh_port" =~ ^[0-9]{1,5}$ ]]
+
+          install -d -m 700 "$HOME/.ssh"
+          printf '%s\n' "$SSH_PRIVATE_KEY" >"$HOME/.ssh/production_key"
+          printf '%s\n' "$SSH_KNOWN_HOSTS" >"$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/production_key" "$HOME/.ssh/known_hosts"
+
+          update_infra_argument=""
+          if [[ "$UPDATE_INFRA" == "true" ]]; then
+            update_infra_argument=" --update-infra"
+          fi
+
+          ssh -p "$ssh_port" \
+            -i "$HOME/.ssh/production_key" \
+            -o BatchMode=yes \
+            -o IdentitiesOnly=yes \
+            -o StrictHostKeyChecking=yes \
+            "$SSH_USER@$SSH_HOST" \
+            "cd '$DEPLOY_PATH' && git fetch --prune origin main && git merge-base --is-ancestor '$IMAGE_TAG' origin/main && git checkout --detach '$IMAGE_TAG' && ./scripts/production/deploy.sh --env-file '$ENV_FILE' --image-tag '$IMAGE_TAG' --pull${update_infra_argument}"

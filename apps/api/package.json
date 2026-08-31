@@ -3,6 +3,10 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "files": [
+    "dist",
+    "scripts/production-monitor.mjs"
+  ],
   "scripts": {
     "build": "prisma generate && nest build",
     "curriculum:catalog": "node scripts/build-chaozhou-smartedu-catalog.mjs",

@@ -1,0 +1,72 @@
+name: Release production images
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: release-images-${{ github.sha }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: publish immutable images
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          fetch-depth: 0
+
+      - name: Require the release revision to be on main
+        env:
+          REVISION: ${{ github.sha }}
+        run: |
+          git fetch --no-tags --prune origin main
+          git merge-base --is-ancestor "$REVISION" origin/main
+
+      - name: Log in to GitHub Container Registry
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: printf '%s' "$GHCR_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+
+      - name: Build and publish immutable images
+        env:
+          REVISION: ${{ github.sha }}
+        run: |
+          owner="${GITHUB_REPOSITORY_OWNER,,}"
+          prefix="ghcr.io/${owner}/qinglan-study"
+
+          docker build --label "org.opencontainers.image.revision=${REVISION}" --file apps/api/Dockerfile --target api --tag "${prefix}-api:${REVISION}" .
+          docker build --label "org.opencontainers.image.revision=${REVISION}" --file apps/api/Dockerfile --target migrate --tag "${prefix}-migrate:${REVISION}" .
+          docker build --label "org.opencontainers.image.revision=${REVISION}" --file apps/web/Dockerfile --target gateway --tag "${prefix}-gateway:${REVISION}" .
+          docker build --label "org.opencontainers.image.revision=${REVISION}" --file ops/postgres/Dockerfile --target database --tag "${prefix}-postgres:${REVISION}" .
+          docker build --label "org.opencontainers.image.revision=${REVISION}" --file ops/postgres/Dockerfile --target backup --tag "${prefix}-backup:${REVISION}" .
+
+          docker push "${prefix}-api:${REVISION}"
+          docker push "${prefix}-migrate:${REVISION}"
+          docker push "${prefix}-gateway:${REVISION}"
+          docker push "${prefix}-postgres:${REVISION}"
+          docker push "${prefix}-backup:${REVISION}"
+
+      - name: Publish release summary
+        env:
+          REVISION: ${{ github.sha }}
+        run: |
+          owner="${GITHUB_REPOSITORY_OWNER,,}"
+          {
+            printf "Images published with immutable tag \`%s\`\n\n" "$REVISION"
+            printf -- "- \`ghcr.io/%s/qinglan-study-api:%s\`\n" "$owner" "$REVISION"
+            printf -- "- \`ghcr.io/%s/qinglan-study-migrate:%s\`\n" "$owner" "$REVISION"
+            printf -- "- \`ghcr.io/%s/qinglan-study-gateway:%s\`\n" "$owner" "$REVISION"
+            printf -- "- \`ghcr.io/%s/qinglan-study-postgres:%s\`\n" "$owner" "$REVISION"
+            printf -- "- \`ghcr.io/%s/qinglan-study-backup:%s\`\n" "$owner" "$REVISION"
+          } >>"$GITHUB_STEP_SUMMARY"

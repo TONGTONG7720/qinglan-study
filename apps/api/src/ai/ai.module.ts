@@ -5,6 +5,7 @@ import { AiController } from "./ai.controller.js";
 import { BudgetService } from "./budget.service.js";
 import {
   DeterministicFakeProvider,
+  DisabledModelProvider,
   MODEL_PROVIDER,
   ModelGatewayService,
 } from "./model-gateway.service.js";
@@ -18,12 +19,14 @@ import { OcrService } from "./ocr.service.js";
   providers: [
     BudgetService,
     DeterministicFakeProvider,
+    DisabledModelProvider,
     OpenAiCompatibleProvider,
     {
       provide: MODEL_PROVIDER,
-      inject: [DeterministicFakeProvider, OpenAiCompatibleProvider],
+      inject: [DeterministicFakeProvider, DisabledModelProvider, OpenAiCompatibleProvider],
       useFactory: (
         fakeProvider: DeterministicFakeProvider,
+        disabledProvider: DisabledModelProvider,
         openAiCompatibleProvider: OpenAiCompatibleProvider,
       ): ModelProvider => {
         if (process.env.NODE_ENV === "test") {
@@ -33,10 +36,13 @@ import { OcrService } from "./ocr.service.js";
         if (configured === "fake") {
           return fakeProvider;
         }
+        if (configured === "disabled") {
+          return disabledProvider;
+        }
         if (configured === "openai-compatible") {
           return openAiCompatibleProvider;
         }
-        throw new Error("MODEL_PROVIDER must be fake or openai-compatible");
+        throw new Error("MODEL_PROVIDER must be disabled, fake, or openai-compatible");
       },
     },
     ModelGatewayService,

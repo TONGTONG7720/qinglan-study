@@ -4,6 +4,12 @@ packages:
 
 minimumReleaseAge: 1440
 
+fetchRetries: 5
+fetchRetryMintimeout: 10000
+fetchRetryMaxtimeout: 120000
+fetchTimeout: 120000
+networkConcurrency: 8
+
 allowBuilds:
   "@prisma/engines": true
   "argon2": true
