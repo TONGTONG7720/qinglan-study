@@ -34,7 +34,9 @@ require_value() {
 
 for variable_name in \
   IMAGE_TAG INFRA_IMAGE_TAG DEPLOY_OWNER_USER DEPLOY_OWNER_GROUP SITE_ADDRESS ACME_EMAIL \
-  ALLOWED_ORIGINS SESSION_COOKIE_NAME \
+  ALLOWED_ORIGINS SESSION_COOKIE_NAME REQUEST_BODY_LIMIT_BYTES CSRF_PROTECTION_ENABLED \
+  VITE_ENABLE_DEMO_COURSE_CATALOG VITE_QA_DEMO_BUILD \
+  MODEL_PROVIDER OBJECT_STORAGE_PROVIDER EMAIL_PROVIDER \
   EXPECTED_MIGRATION_NAME \
   POSTGRES_DB BACKUP_SHARED_GID \
   POSTGRES_ADMIN_USER POSTGRES_MIGRATOR_USER POSTGRES_APP_USER POSTGRES_BACKUP_USER \
@@ -89,6 +91,28 @@ case "$SESSION_COOKIE_NAME" in
   __Host-*) ;;
   *) echo "SESSION_COOKIE_NAME must use the __Host- prefix" >&2; exit 78 ;;
 esac
+
+if [ "$REQUEST_BODY_LIMIT_BYTES" != "256000" ]; then
+  echo "REQUEST_BODY_LIMIT_BYTES must match the reviewed 256 KB API and gateway limit" >&2
+  exit 78
+fi
+if [ "$CSRF_PROTECTION_ENABLED" != "true" ]; then
+  echo "CSRF_PROTECTION_ENABLED must be true in production" >&2
+  exit 78
+fi
+if [ "$VITE_ENABLE_DEMO_COURSE_CATALOG" != "false" ] \
+  || [ "$VITE_QA_DEMO_BUILD" != "false" ]; then
+  echo "production deployment must disable every Web demo and QA build flag" >&2
+  exit 78
+fi
+if [ "$OBJECT_STORAGE_PROVIDER" != "disabled" ]; then
+  echo "OBJECT_STORAGE_PROVIDER must remain disabled until a production adapter is implemented" >&2
+  exit 78
+fi
+if [ "$EMAIL_PROVIDER" != "disabled" ]; then
+  echo "EMAIL_PROVIDER must remain disabled until a production adapter is implemented" >&2
+  exit 78
+fi
 
 latest_migration_name="$(
   for migration_path in "$repository_root"/apps/api/prisma/migrations/*; do
@@ -230,7 +254,7 @@ if ! grep -Fq "postgresql://${POSTGRES_BACKUP_USER}:" "$BACKUP_DATABASE_URL_FILE
   exit 78
 fi
 
-case "${MODEL_PROVIDER:-disabled}" in
+case "$MODEL_PROVIDER" in
   disabled) ;;
   openai-compatible)
     case "${MODEL_BASE_URL:-}" in

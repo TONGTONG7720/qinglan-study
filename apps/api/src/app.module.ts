@@ -1,10 +1,10 @@
 import { Module } from "@nestjs/common";
-import type { MiddlewareConsumer, NestModule } from "@nestjs/common";
+import { APP_GUARD } from "@nestjs/core";
+import { ThrottlerGuard, ThrottlerModule } from "@nestjs/throttler";
 
 import { AdminOverviewModule } from "./admin/admin-overview.module.js";
 import { AuthModule } from "./auth/auth.module.js";
 import { AiModule } from "./ai/ai.module.js";
-import { RequestIdMiddleware } from "./common/http/request-id.middleware.js";
 import { CurriculumModule } from "./curriculum/curriculum.module.js";
 import { DailyPlanModule } from "./daily-plans/daily-plan.module.js";
 import { ExamModule } from "./exams/exam.module.js";
@@ -17,9 +17,26 @@ import { QuestionBankModule } from "./question-bank/question-bank.module.js";
 import { WeeklyReportModule } from "./reports/weekly-report.module.js";
 import { TutorModule } from "./tutor/tutor.module.js";
 
-@Module({ imports: [HealthModule, AuthModule, InvitationModule, FamilyModule, CurriculumModule, DailyPlanModule, AiModule, TutorModule, MasteryModule, ExamModule, WeeklyReportModule, AdminOverviewModule, PrivacyModule, QuestionBankModule] })
-export class AppModule implements NestModule {
-  configure(consumer: MiddlewareConsumer): void {
-    consumer.apply(RequestIdMiddleware).forRoutes("*");
-  }
-}
+@Module({
+  imports: [
+    ThrottlerModule.forRoot([
+      { name: "default", ttl: 60_000, limit: 300, blockDuration: 60_000 },
+    ]),
+    HealthModule,
+    AuthModule,
+    InvitationModule,
+    FamilyModule,
+    CurriculumModule,
+    DailyPlanModule,
+    AiModule,
+    TutorModule,
+    MasteryModule,
+    ExamModule,
+    WeeklyReportModule,
+    AdminOverviewModule,
+    PrivacyModule,
+    QuestionBankModule,
+  ],
+  providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
+})
+export class AppModule {}

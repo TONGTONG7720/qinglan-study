@@ -31,6 +31,7 @@ export async function login(input: LoginInput, signal?: AbortSignal): Promise<Cu
     headers: {
       Accept: "application/json",
       "Content-Type": "application/json",
+      "X-Qinglang-CSRF": "1",
     },
     body: JSON.stringify(parsed),
   };
