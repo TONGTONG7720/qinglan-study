@@ -1,0 +1,25 @@
+.planned-surface { display: grid; min-height: 100dvh; grid-template-columns: var(--ql-sidebar-width) minmax(0, 1fr); background: var(--ql-bg-surface); }
+.planned-surface > aside { display: flex; min-height: 100dvh; flex-direction: column; justify-content: space-between; padding: 34px 28px; background: var(--ql-bg-sidebar); color: var(--ql-text-inverse); }
+.planned-brand { display: grid; gap: 7px; }
+.planned-brand strong { font-family: var(--ql-font-display); font-size: 1.7rem; letter-spacing: .06em; }
+.planned-brand span { color: color-mix(in srgb, var(--ql-text-inverse) 62%, transparent); font-family: var(--ql-font-mono); font-size: .65rem; letter-spacing: .18em; }
+.planned-brand i { display: grid; width: 27px; height: 27px; margin-top: 8px; place-items: center; border: 1px solid var(--ql-error); color: var(--ql-error); font-size: .5rem; font-style: normal; }
+.planned-surface aside nav span { display: block; padding: 15px 0; border-left: 2px solid var(--ql-action-primary); color: color-mix(in srgb, var(--ql-action-primary) 75%, white); text-indent: 18px; }
+.planned-surface aside small { color: color-mix(in srgb, var(--ql-text-inverse) 58%, transparent); }
+.planned-surface > section { display: grid; width: min(100%, 980px); align-content: center; justify-self: center; padding: 56px clamp(34px, 7vw, 108px); }
+.planned-surface > section > header { display: flex; justify-content: space-between; gap: 20px; padding-bottom: 20px; border-bottom: 1px solid var(--ql-divider); }
+.planned-surface > section > header span { color: var(--ql-text-accent); font-family: var(--ql-font-mono); }
+.planned-surface > section > header strong { color: var(--ql-text-secondary); font-size: .78rem; font-weight: 500; }
+.planned-message { display: grid; gap: 18px; padding: 46px 0 34px; }
+.planned-message h1 { font-family: var(--ql-font-display); font-size: clamp(2.5rem, 5vw, 4.8rem); font-weight: 400; }
+.planned-message p { max-width: 60ch; color: var(--ql-text-secondary); line-height: 1.8; }
+.planned-surface dl { display: grid; grid-template-columns: repeat(2, 1fr); margin: 0; border-top: 1px solid var(--ql-divider); }
+.planned-surface dl div { display: grid; grid-template-columns: 1fr auto; gap: 18px; min-height: 58px; align-items: center; border-bottom: 1px solid var(--ql-border-subtle); }
+.planned-surface dl div:nth-child(odd) { padding-right: 28px; }
+.planned-surface dl div:nth-child(even) { padding-left: 28px; border-left: 1px solid var(--ql-border-subtle); }
+.planned-surface dt { color: var(--ql-text-secondary); }
+.planned-surface dd { margin: 0; }
+.planned-actions { display: flex; flex-wrap: wrap; gap: 14px; padding-top: 30px; }
+.planned-actions a { display: inline-flex; min-height: 46px; align-items: center; padding: 0 20px; border: 1px solid var(--ql-action-primary); color: var(--ql-text-accent); text-decoration: none; }
+.planned-actions a:first-child { background: var(--ql-action-primary); color: var(--ql-action-on-primary); }
+@media (max-width: 780px) { .planned-surface { grid-template-columns: 1fr; } .planned-surface > aside { min-height: 120px; padding: 22px 20px; } .planned-surface aside nav, .planned-surface aside small { display: none; } .planned-surface > section { padding: 42px 22px 56px; } .planned-surface dl { grid-template-columns: 1fr; } .planned-surface dl div:nth-child(n) { padding: 0; border-left: 0; } }

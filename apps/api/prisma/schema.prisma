@@ -1,0 +1,1171 @@
+generator client {
+  provider               = "prisma-client"
+  output                 = "../src/generated/prisma"
+  runtime                = "nodejs"
+  moduleFormat           = "esm"
+  generatedFileExtension = "ts"
+  importFileExtension    = "js"
+  engineType             = "client"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  STUDENT
+  GUARDIAN
+  ADMIN
+}
+
+enum AccessLevel {
+  OWNER
+  MEMBER
+}
+
+enum UserStatus {
+  ACTIVE
+  DISABLED
+  DELETION_PENDING
+}
+
+enum FamilyStatus {
+  ACTIVE
+  DELETION_PENDING
+  DELETED
+}
+
+enum StudentStatus {
+  ACTIVE
+  DISABLED
+}
+
+enum InvitationMode {
+  NEW_FAMILY
+  JOIN_FAMILY
+}
+
+enum OperationStatus {
+  PENDING
+  RUNNING
+  SUCCEEDED
+  FAILED
+  CANCELLED
+}
+
+enum OwnershipTransferStatus {
+  PENDING
+  ACCEPTED
+  CANCELLED
+  EXPIRED
+}
+
+enum SubjectCode {
+  CHINESE
+  MATH
+  ENGLISH
+  MORALITY
+  HISTORY
+  PHYSICS
+  CHEMISTRY
+}
+
+enum ContentVerificationStatus {
+  DRAFT
+  CONFIRMED
+  RETIRED
+}
+
+enum StudentTextbookAlignmentStatus {
+  UNCONFIRMED
+  CONFIRMED
+}
+
+enum KnowledgeAbilityLevel {
+  REMEMBER
+  UNDERSTAND
+  APPLY
+  ANALYZE
+  EVALUATE
+  CREATE
+}
+
+enum QuestionBankType {
+  SINGLE_CHOICE
+  MULTIPLE_CHOICE
+  TRUE_FALSE
+  FILL_BLANK
+  SHORT_ANSWER
+  CALCULATION
+  EXPERIMENT_DESIGN
+  ERROR_DIAGNOSIS
+  GRAPHING
+}
+
+enum ContentType {
+  DEFINITION
+  CONCEPT
+  FORMULA
+  EXPERIMENT
+  EXAMPLE
+  ILLUSTRATION
+  SUMMARY
+  OTHER
+}
+
+enum ContentLicenseStatus {
+  AUTHORIZED
+  HOUSEHOLD_PRIVATE
+  PUBLIC_DOMAIN
+  LICENSE_REVIEW_REQUIRED
+  PROHIBITED
+}
+
+enum TextbookAssetStatus {
+  REGISTERED
+  AVAILABLE
+  QUARANTINED
+  RETIRED
+}
+
+enum QuestionBankStatus {
+  DRAFT
+  SOLVER_VALIDATED
+  DEDUPLICATED
+  FACT_CHECKED
+  REVIEWED
+  PUBLISHED
+  REJECTED
+  RETIRED
+}
+
+enum QuestionBankSourceType {
+  ORIGINAL_HUMAN
+  ORIGINAL_AI
+  AUTHORIZED_ADAPTATION
+}
+
+enum QuestionBankValidationKind {
+  AUTO_SOLVE
+  DEDUPLICATION
+  SUBJECT_FACT_CHECK
+}
+
+enum QuestionBankValidationStatus {
+  PASSED
+  FAILED
+}
+
+enum QuestionBankReviewDecision {
+  APPROVED
+  CHANGES_REQUESTED
+  REJECTED
+}
+
+model User {
+  id                        String                        @id @default(uuid()) @db.Uuid
+  loginId                   String                        @unique @db.VarChar(120)
+  passwordHash              String                        @db.VarChar(255)
+  displayName               String                        @db.VarChar(60)
+  roles                     Role[]
+  status                    UserStatus                    @default(ACTIVE)
+  createdAt                 DateTime                      @default(now()) @db.Timestamptz(6)
+  updatedAt                 DateTime                      @updatedAt @db.Timestamptz(6)
+  sessions                  Session[]
+  memberships               FamilyMembership[]
+  studentProfile            StudentProfile?
+  guardianLinks             GuardianStudentRelation[]     @relation("GuardianLinks")
+  studentLinks              GuardianStudentRelation[]     @relation("StudentLinks")
+  consentsGranted           Consent[]                     @relation("ConsentGuardian")
+  consentsReceived          Consent[]                     @relation("ConsentStudent")
+  invitationsIssued         Invitation[]                  @relation("InvitationIssuer")
+  joinAuthorizations        JoinInvitationAuthorization[] @relation("JoinAuthorizationOwner")
+  transfersProposed         OwnershipTransfer[]           @relation("OwnershipTransferProposer")
+  transfersTargeted         OwnershipTransfer[]           @relation("OwnershipTransferTarget")
+  textbookEditionsVerified  TextbookEdition[]             @relation("TextbookVerifier")
+  textbookContextsAsStudent StudentTextbookContext[]      @relation("StudentTextbookStudent")
+  textbookContextsSubmitted StudentTextbookContext[]      @relation("TextbookContextSubmitter")
+  textbookContextsVerified  StudentTextbookContext[]      @relation("TextbookContextVerifier")
+  planCandidates            PlanCandidate[]
+  dailyPlans                DailyPlan[]
+  learningEvidence          LearningEvidence[]
+  budgetReservations        BudgetReservation[]
+  privateObjects            PrivateObject[]
+  questions                 Question[]
+  modelCalls                ModelCall[]
+  reviewedContents          ReviewedContent[]
+  textbookAssetsUploaded    TextbookAsset[]               @relation("TextbookAssetUploader")
+  textbookAssetsApproved    TextbookAsset[]               @relation("TextbookAssetApprover")
+  questionBankItemsCreated  QuestionBankItem[]            @relation("QuestionBankItemCreator")
+  questionBankItemsReviewed QuestionBankItem[]            @relation("QuestionBankItemReviewer")
+  questionBankReviews       QuestionBankReview[]
+  tutorSessions             TutorSession[]
+  mistakes                  Mistake[]
+  recoveryAttempts          RecoveryAttempt[]
+  masteryEvidence           MasteryEvidence[]
+  masteryStates             MasteryState[]
+  examsAsStudent            Exam[]                        @relation("ExamStudent")
+  examsCreated              Exam[]                        @relation("ExamCreator")
+  remediationLinks          RemediationLink[]
+  weeklyReports             WeeklyReport[]
+  auditEvents               AuditEvent[]                  @relation("AuditActor")
+  operations                Operation[]
+}
+
+model Session {
+  id         String    @id @default(uuid()) @db.Uuid
+  userId     String    @db.Uuid
+  tokenHash  String    @unique @db.Char(64)
+  expiresAt  DateTime  @db.Timestamptz(6)
+  lastSeenAt DateTime? @db.Timestamptz(6)
+  revokedAt  DateTime? @db.Timestamptz(6)
+  createdAt  DateTime  @default(now()) @db.Timestamptz(6)
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, revokedAt, expiresAt])
+}
+
+model Family {
+  id                 String                        @id @default(uuid()) @db.Uuid
+  name               String                        @db.VarChar(80)
+  status             FamilyStatus                  @default(ACTIVE)
+  createdAt          DateTime                      @default(now()) @db.Timestamptz(6)
+  updatedAt          DateTime                      @updatedAt @db.Timestamptz(6)
+  memberships        FamilyMembership[]
+  studentProfiles    StudentProfile[]
+  guardianLinks      GuardianStudentRelation[]
+  invitations        Invitation[]
+  joinAuthorizations JoinInvitationAuthorization[]
+  ownershipTransfers OwnershipTransfer[]
+  aiBudget           FamilyAiBudget?
+  budgetPeriods      BudgetPeriodUsage[]
+  budgetReservations BudgetReservation[]
+  auditEvents        AuditEvent[]
+  operations         Operation[]
+}
+
+model FamilyMembership {
+  id          String       @id @default(uuid()) @db.Uuid
+  familyId    String       @db.Uuid
+  userId      String       @db.Uuid
+  role        Role
+  accessLevel AccessLevel?
+  activeAt    DateTime     @default(now()) @db.Timestamptz(6)
+  revokedAt   DateTime?    @db.Timestamptz(6)
+  family      Family       @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([familyId, userId, role])
+  @@index([userId, revokedAt])
+}
+
+model GuardianStudentRelation {
+  id             String    @id @default(uuid()) @db.Uuid
+  familyId       String    @db.Uuid
+  guardianUserId String    @db.Uuid
+  studentUserId  String    @db.Uuid
+  grantedAt      DateTime  @default(now()) @db.Timestamptz(6)
+  revokedAt      DateTime? @db.Timestamptz(6)
+  family         Family    @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  guardian       User      @relation("GuardianLinks", fields: [guardianUserId], references: [id], onDelete: Cascade)
+  student        User      @relation("StudentLinks", fields: [studentUserId], references: [id], onDelete: Cascade)
+
+  @@unique([familyId, guardianUserId, studentUserId])
+  @@index([guardianUserId, studentUserId, revokedAt])
+}
+
+model StudentProfile {
+  id           String        @id @default(uuid()) @db.Uuid
+  userId       String        @unique @db.Uuid
+  familyId     String        @db.Uuid
+  grade        Int
+  dailyMinutes Int           @default(40)
+  schoolName   String?       @db.VarChar(120)
+  cohortYear   Int?
+  status       StudentStatus @default(ACTIVE)
+  createdAt    DateTime      @default(now()) @db.Timestamptz(6)
+  updatedAt    DateTime      @updatedAt @db.Timestamptz(6)
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  family       Family        @relation(fields: [familyId], references: [id], onDelete: Cascade)
+
+  @@index([familyId, status])
+}
+
+model Invitation {
+  id                   String         @id @default(uuid()) @db.Uuid
+  tokenHash            String         @unique @db.Char(64)
+  mode                 InvitationMode
+  targetRole           Role           @default(GUARDIAN)
+  familyId             String?        @db.Uuid
+  createdByUserId      String         @db.Uuid
+  linkedStudentIds     Json?
+  ownerAuthorizationId String?        @unique @db.Uuid
+  expiresAt            DateTime       @db.Timestamptz(6)
+  usedAt               DateTime?      @db.Timestamptz(6)
+  revokedAt            DateTime?      @db.Timestamptz(6)
+  createdAt            DateTime       @default(now()) @db.Timestamptz(6)
+  family               Family?        @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  createdBy            User           @relation("InvitationIssuer", fields: [createdByUserId], references: [id], onDelete: Restrict)
+
+  ownerAuthorization JoinInvitationAuthorization? @relation(fields: [ownerAuthorizationId], references: [id], onDelete: Restrict)
+
+  @@index([familyId, expiresAt])
+}
+
+model JoinInvitationAuthorization {
+  id                      String      @id @default(uuid()) @db.Uuid
+  familyId                String      @db.Uuid
+  authorizedByOwnerUserId String      @db.Uuid
+  linkedStudentIds        Json
+  expiresAt               DateTime    @db.Timestamptz(6)
+  usedAt                  DateTime?   @db.Timestamptz(6)
+  revokedAt               DateTime?   @db.Timestamptz(6)
+  createdAt               DateTime    @default(now()) @db.Timestamptz(6)
+  family                  Family      @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  authorizedByOwner       User        @relation("JoinAuthorizationOwner", fields: [authorizedByOwnerUserId], references: [id], onDelete: Restrict)
+  invitation              Invitation?
+
+  @@index([familyId, expiresAt])
+}
+
+model OwnershipTransfer {
+  id               String                  @id @default(uuid()) @db.Uuid
+  familyId         String                  @db.Uuid
+  proposedByUserId String                  @db.Uuid
+  targetUserId     String                  @db.Uuid
+  status           OwnershipTransferStatus @default(PENDING)
+  expiresAt        DateTime                @db.Timestamptz(6)
+  acceptedAt       DateTime?               @db.Timestamptz(6)
+  cancelledAt      DateTime?               @db.Timestamptz(6)
+  createdAt        DateTime                @default(now()) @db.Timestamptz(6)
+  family           Family                  @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  proposedBy       User                    @relation("OwnershipTransferProposer", fields: [proposedByUserId], references: [id], onDelete: Restrict)
+  target           User                    @relation("OwnershipTransferTarget", fields: [targetUserId], references: [id], onDelete: Restrict)
+
+  @@index([familyId, status, expiresAt])
+  @@index([targetUserId, status])
+}
+
+model Consent {
+  id             String    @id @default(uuid()) @db.Uuid
+  guardianUserId String    @db.Uuid
+  studentUserId  String    @db.Uuid
+  policyVersion  String    @db.VarChar(40)
+  grantedAt      DateTime  @default(now()) @db.Timestamptz(6)
+  revokedAt      DateTime? @db.Timestamptz(6)
+  guardian       User      @relation("ConsentGuardian", fields: [guardianUserId], references: [id], onDelete: Cascade)
+  student        User      @relation("ConsentStudent", fields: [studentUserId], references: [id], onDelete: Cascade)
+
+  @@unique([guardianUserId, studentUserId, policyVersion])
+}
+
+model AuditEvent {
+  id           String   @id @default(uuid()) @db.Uuid
+  actorUserId  String?  @db.Uuid
+  familyId     String?  @db.Uuid
+  action       String   @db.VarChar(100)
+  resourceType String   @db.VarChar(80)
+  resourceId   String?  @db.VarChar(120)
+  reason       String?  @db.VarChar(240)
+  metadata     Json?
+  createdAt    DateTime @default(now()) @db.Timestamptz(6)
+  actor        User?    @relation("AuditActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+  family       Family?  @relation(fields: [familyId], references: [id], onDelete: SetNull)
+
+  @@index([familyId, createdAt])
+  @@index([actorUserId, createdAt])
+}
+
+model Operation {
+  id            String          @id @default(uuid()) @db.Uuid
+  userId        String?         @db.Uuid
+  familyId      String?         @db.Uuid
+  kind          String          @db.VarChar(80)
+  dedupeKey     String          @db.VarChar(160)
+  status        OperationStatus @default(PENDING)
+  attemptCount  Int             @default(0)
+  nextRunAt     DateTime?       @db.Timestamptz(6)
+  lastErrorCode String?         @db.VarChar(80)
+  payload       Json?
+  createdAt     DateTime        @default(now()) @db.Timestamptz(6)
+  updatedAt     DateTime        @updatedAt @db.Timestamptz(6)
+  user          User?           @relation(fields: [userId], references: [id], onDelete: SetNull)
+  family        Family?         @relation(fields: [familyId], references: [id], onDelete: Cascade)
+
+  @@unique([kind, dedupeKey])
+  @@index([status, nextRunAt])
+}
+
+model Subject {
+  code            SubjectCode              @id
+  displayName     String                   @db.VarChar(40)
+  availability    SubjectAvailability[]
+  textbooks       TextbookEdition[]
+  studentContexts StudentTextbookContext[]
+  exams           Exam[]
+}
+
+model SubjectAvailability {
+  id          String      @id @default(uuid()) @db.Uuid
+  grade       Int
+  subjectCode SubjectCode
+  enabled     Boolean     @default(false)
+  subject     Subject     @relation(fields: [subjectCode], references: [code], onDelete: Restrict)
+
+  @@unique([grade, subjectCode])
+  @@index([grade, enabled])
+}
+
+model TextbookEdition {
+  id                String                    @id @default(uuid()) @db.Uuid
+  subjectCode       SubjectCode
+  grade             Int
+  publisher         String                    @db.VarChar(120)
+  editionName       String                    @db.VarChar(120)
+  volume            String                    @db.VarChar(80)
+  status            ContentVerificationStatus @default(DRAFT)
+  sourceReference   String?                   @db.VarChar(500)
+  verifiedByUserId  String?                   @db.Uuid
+  verifiedAt        DateTime?                 @db.Timestamptz(6)
+  createdAt         DateTime                  @default(now()) @db.Timestamptz(6)
+  updatedAt         DateTime                  @updatedAt @db.Timestamptz(6)
+  subject           Subject                   @relation(fields: [subjectCode], references: [code], onDelete: Restrict)
+  verifiedBy        User?                     @relation("TextbookVerifier", fields: [verifiedByUserId], references: [id], onDelete: SetNull)
+  units             Unit[]
+  studentContexts   StudentTextbookContext[]
+  reviewedContents  ReviewedContent[]
+  textbookAssets    TextbookAsset[]
+  questionBankItems QuestionBankItem[]
+
+  @@unique([subjectCode, grade, publisher, editionName, volume])
+  @@index([subjectCode, grade, status])
+}
+
+model Unit {
+  id                String                    @id @default(uuid()) @db.Uuid
+  textbookEditionId String                    @db.Uuid
+  ordinal           Int
+  title             String                    @db.VarChar(160)
+  status            ContentVerificationStatus @default(DRAFT)
+  createdAt         DateTime                  @default(now()) @db.Timestamptz(6)
+  updatedAt         DateTime                  @updatedAt @db.Timestamptz(6)
+  textbookEdition   TextbookEdition           @relation(fields: [textbookEditionId], references: [id], onDelete: Cascade)
+  knowledgeNodes    KnowledgeNode[]
+  studentContexts   StudentTextbookContext[]
+  reviewedContents  ReviewedContent[]
+  questionBankItems QuestionBankItem[]
+
+  @@unique([textbookEditionId, ordinal])
+  @@index([textbookEditionId, status])
+}
+
+model KnowledgeNode {
+  id                    String                          @id @default(uuid()) @db.Uuid
+  unitId                String                          @db.Uuid
+  title                 String                          @db.VarChar(160)
+  objective             String                          @db.VarChar(500)
+  prerequisiteKnowledge Json                            @default("[]")
+  commonErrors          Json                            @default("[]")
+  abilityLevels         KnowledgeAbilityLevel[]         @default([])
+  questionTypes         QuestionBankType[]              @default([])
+  pageStart             Int?
+  pageEnd               Int?
+  contentVersion        String                          @default("1") @db.VarChar(40)
+  status                ContentVerificationStatus       @default(DRAFT)
+  createdAt             DateTime                        @default(now()) @db.Timestamptz(6)
+  updatedAt             DateTime                        @updatedAt @db.Timestamptz(6)
+  unit                  Unit                            @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  mistakes              Mistake[]
+  masteryEvidence       MasteryEvidence[]
+  masteryStates         MasteryState[]
+  examItems             ExamItem[]
+  reviewedContents      ReviewedContent[]
+  questionBankLinks     QuestionBankItemKnowledgeNode[]
+
+  @@index([unitId, status])
+}
+
+model TextbookAsset {
+  id                String               @id @default(uuid()) @db.Uuid
+  textbookEditionId String               @db.Uuid
+  objectKey         String               @unique @db.VarChar(300)
+  sha256            String               @db.Char(64)
+  mimeType          String               @db.VarChar(80)
+  sizeBytes         Int
+  pageCount         Int
+  licenseStatus     ContentLicenseStatus
+  licenseReference  String               @db.VarChar(500)
+  sourceVersion     String               @db.VarChar(80)
+  status            TextbookAssetStatus  @default(REGISTERED)
+  scanPassed        Boolean              @default(false)
+  uploadedByUserId  String               @db.Uuid
+  approvedByUserId  String?              @db.Uuid
+  approvedAt        DateTime?            @db.Timestamptz(6)
+  createdAt         DateTime             @default(now()) @db.Timestamptz(6)
+  updatedAt         DateTime             @updatedAt @db.Timestamptz(6)
+  textbookEdition   TextbookEdition      @relation(fields: [textbookEditionId], references: [id], onDelete: Cascade)
+  uploadedBy        User                 @relation("TextbookAssetUploader", fields: [uploadedByUserId], references: [id], onDelete: Restrict)
+  approvedBy        User?                @relation("TextbookAssetApprover", fields: [approvedByUserId], references: [id], onDelete: SetNull)
+  reviewedContents  ReviewedContent[]
+
+  @@index([textbookEditionId, status])
+  @@index([sha256])
+}
+
+model StudentTextbookContext {
+  id                String                         @id @default(uuid()) @db.Uuid
+  studentUserId     String                         @db.Uuid
+  subjectCode       SubjectCode
+  reportedPublisher String?                        @db.VarChar(120)
+  reportedEdition   String?                        @db.VarChar(120)
+  reportedVolume    String?                        @db.VarChar(80)
+  reportedDirectory Json?
+  textbookEditionId String?                        @db.Uuid
+  currentUnitId     String?                        @db.Uuid
+  status            StudentTextbookAlignmentStatus @default(UNCONFIRMED)
+  submittedByUserId String                         @db.Uuid
+  verifiedByUserId  String?                        @db.Uuid
+  verifiedAt        DateTime?                      @db.Timestamptz(6)
+  createdAt         DateTime                       @default(now()) @db.Timestamptz(6)
+  updatedAt         DateTime                       @updatedAt @db.Timestamptz(6)
+  student           User                           @relation("StudentTextbookStudent", fields: [studentUserId], references: [id], onDelete: Cascade)
+  subject           Subject                        @relation(fields: [subjectCode], references: [code], onDelete: Restrict)
+  textbookEdition   TextbookEdition?               @relation(fields: [textbookEditionId], references: [id], onDelete: Restrict)
+  currentUnit       Unit?                          @relation(fields: [currentUnitId], references: [id], onDelete: SetNull)
+  submittedBy       User                           @relation("TextbookContextSubmitter", fields: [submittedByUserId], references: [id], onDelete: Restrict)
+  verifiedBy        User?                          @relation("TextbookContextVerifier", fields: [verifiedByUserId], references: [id], onDelete: SetNull)
+
+  @@unique([studentUserId, subjectCode])
+  @@index([textbookEditionId, status])
+}
+
+enum PlanCandidateSource {
+  OVERDUE_REVIEW
+  EXAM_REMEDIATION
+  CURRENT_UNIT
+  DIAGNOSTIC
+}
+
+enum PlanTaskStatus {
+  PENDING
+  COMPLETED
+}
+
+enum CompletionEvidenceType {
+  ANSWER_EVALUATED
+  REVIEW_SUCCEEDED
+  DIAGNOSTIC_COMPLETED
+  RECOVERY_ATTEMPT
+}
+
+model PlanCandidate {
+  id               String              @id @default(uuid()) @db.Uuid
+  studentUserId    String              @db.Uuid
+  sourceType       PlanCandidateSource
+  sourceId         String              @db.VarChar(120)
+  title            String              @db.VarChar(160)
+  estimatedMinutes Int
+  availableAt      DateTime            @default(now()) @db.Timestamptz(6)
+  active           Boolean             @default(true)
+  student          User                @relation(fields: [studentUserId], references: [id], onDelete: Cascade)
+
+  @@unique([studentUserId, sourceType, sourceId])
+  @@index([studentUserId, active, availableAt])
+}
+
+model DailyPlan {
+  id            String     @id @default(uuid()) @db.Uuid
+  studentUserId String     @db.Uuid
+  learningDay   DateTime   @db.Date
+  totalMinutes  Int
+  generatedAt   DateTime   @default(now()) @db.Timestamptz(6)
+  student       User       @relation(fields: [studentUserId], references: [id], onDelete: Cascade)
+  tasks         PlanTask[]
+
+  @@unique([studentUserId, learningDay])
+  @@index([studentUserId, generatedAt])
+}
+
+model PlanTask {
+  id               String              @id @default(uuid()) @db.Uuid
+  dailyPlanId      String              @db.Uuid
+  sourceType       PlanCandidateSource
+  sourceId         String              @db.VarChar(120)
+  title            String              @db.VarChar(160)
+  estimatedMinutes Int
+  ordinal          Int
+  status           PlanTaskStatus      @default(PENDING)
+  createdAt        DateTime            @default(now()) @db.Timestamptz(6)
+  dailyPlan        DailyPlan           @relation(fields: [dailyPlanId], references: [id], onDelete: Cascade)
+  completion       PlanTaskCompletion?
+
+  @@unique([dailyPlanId, ordinal])
+  @@unique([dailyPlanId, sourceType, sourceId])
+}
+
+model LearningEvidence {
+  id               String                 @id @default(uuid()) @db.Uuid
+  studentUserId    String                 @db.Uuid
+  type             CompletionEvidenceType
+  independent      Boolean                @default(false)
+  valid            Boolean                @default(false)
+  occurredAt       DateTime               @default(now()) @db.Timestamptz(6)
+  metadata         Json?
+  student          User                   @relation(fields: [studentUserId], references: [id], onDelete: Cascade)
+  completion       PlanTaskCompletion?
+  recoveryAttempts RecoveryAttempt[]
+  masteryEvidence  MasteryEvidence[]
+  remediationLinks RemediationLink[]
+
+  @@index([studentUserId, type, occurredAt])
+}
+
+model PlanTaskCompletion {
+  id          String           @id @default(uuid()) @db.Uuid
+  planTaskId  String           @unique @db.Uuid
+  evidenceId  String           @unique @db.Uuid
+  completedAt DateTime         @default(now()) @db.Timestamptz(6)
+  planTask    PlanTask         @relation(fields: [planTaskId], references: [id], onDelete: Cascade)
+  evidence    LearningEvidence @relation(fields: [evidenceId], references: [id], onDelete: Restrict)
+}
+
+enum BudgetReservationStatus {
+  RESERVED
+  SETTLED
+  RELEASED
+}
+
+enum PrivateObjectStatus {
+  PENDING_UPLOAD
+  READY
+  QUARANTINED
+  DELETED
+}
+
+enum QuestionStatus {
+  UPLOADING
+  OCR_PENDING
+  OCR_REVIEW
+  READY
+  FAILED
+}
+
+enum ModelCallStatus {
+  PENDING
+  SUCCEEDED
+  FAILED
+}
+
+model AiBudgetPolicy {
+  id                  String   @id @default("SYSTEM") @db.VarChar(20)
+  systemMonthlyCapFen Int
+  defaultFamilyCapFen Int
+  updatedAt           DateTime @updatedAt @db.Timestamptz(6)
+}
+
+model FamilyAiBudget {
+  familyId      String @id @db.Uuid
+  monthlyCapFen Int
+  family        Family @relation(fields: [familyId], references: [id], onDelete: Cascade)
+}
+
+model BudgetPeriodUsage {
+  id          String @id @default(uuid()) @db.Uuid
+  familyId    String @db.Uuid
+  period      String @db.Char(7)
+  reservedFen Int    @default(0)
+  settledFen  Int    @default(0)
+  family      Family @relation(fields: [familyId], references: [id], onDelete: Cascade)
+
+  @@unique([familyId, period])
+}
+
+model BudgetReservation {
+  id        String                  @id @default(uuid()) @db.Uuid
+  familyId  String                  @db.Uuid
+  userId    String                  @db.Uuid
+  purpose   String                  @db.VarChar(40)
+  amountFen Int
+  status    BudgetReservationStatus @default(RESERVED)
+  dedupeKey String                  @unique @db.VarChar(160)
+  createdAt DateTime                @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime                @updatedAt @db.Timestamptz(6)
+  family    Family                  @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  user      User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  ledger    UsageLedger?
+}
+
+model UsageLedger {
+  id               String            @id @default(uuid()) @db.Uuid
+  reservationId    String            @unique @db.Uuid
+  provider         String            @db.VarChar(60)
+  purpose          String            @db.VarChar(40)
+  costFen          Int
+  redactedMetadata Json?
+  createdAt        DateTime          @default(now()) @db.Timestamptz(6)
+  reservation      BudgetReservation @relation(fields: [reservationId], references: [id], onDelete: Cascade)
+}
+
+model PrivateObject {
+  id                 String              @id @default(uuid()) @db.Uuid
+  ownerStudentUserId String              @db.Uuid
+  storageKey         String              @unique @db.VarChar(240)
+  mimeType           String              @db.VarChar(40)
+  sizeBytes          Int
+  width              Int
+  height             Int
+  sha256             String              @db.Char(64)
+  status             PrivateObjectStatus @default(PENDING_UPLOAD)
+  scanPassed         Boolean             @default(false)
+  expiresAt          DateTime            @db.Timestamptz(6)
+  createdAt          DateTime            @default(now()) @db.Timestamptz(6)
+  owner              User                @relation(fields: [ownerStudentUserId], references: [id], onDelete: Cascade)
+  question           Question?
+}
+
+model Question {
+  id             String         @id @default(uuid()) @db.Uuid
+  studentUserId  String         @db.Uuid
+  objectId       String?        @unique @db.Uuid
+  status         QuestionStatus @default(UPLOADING)
+  ocrText        String?        @db.Text
+  confidence     Float?
+  confirmedText  String?        @db.Text
+  providerCallId String?        @db.VarChar(120)
+  errorCode      String?        @db.VarChar(80)
+  createdAt      DateTime       @default(now()) @db.Timestamptz(6)
+  updatedAt      DateTime       @updatedAt @db.Timestamptz(6)
+  student        User           @relation(fields: [studentUserId], references: [id], onDelete: Cascade)
+  object         PrivateObject? @relation(fields: [objectId], references: [id], onDelete: Restrict)
+}
+
+model ModelCall {
+  id        String          @id @default(uuid()) @db.Uuid
+  userId    String          @db.Uuid
+  purpose   String          @db.VarChar(40)
+  dedupeKey String          @db.VarChar(160)
+  status    ModelCallStatus @default(PENDING)
+  provider  String          @db.VarChar(60)
+  output    Json?
+  costFen   Int?
+  errorCode String?         @db.VarChar(80)
+  createdAt DateTime        @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime        @updatedAt @db.Timestamptz(6)
+  user      User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([purpose, dedupeKey])
+}
+
+enum ReviewedContentStatus {
+  DRAFT
+  REVIEWED
+  RETIRED
+}
+
+model ReviewedContent {
+  id                String                    @id @default(uuid()) @db.Uuid
+  subjectCode       SubjectCode
+  textbookEditionId String                    @db.Uuid
+  unitId            String                    @db.Uuid
+  knowledgeNodeId   String                    @db.Uuid
+  textbookAssetId   String?                   @db.Uuid
+  excerpt           String                    @db.VarChar(2000)
+  sourceReference   String                    @db.VarChar(500)
+  pageStart         Int
+  pageEnd           Int
+  contentType       ContentType               @default(OTHER)
+  sourceHash        String                    @db.Char(64)
+  licenseStatus     ContentLicenseStatus      @default(LICENSE_REVIEW_REQUIRED)
+  contentVersion    String                    @default("1") @db.VarChar(40)
+  status            ReviewedContentStatus     @default(DRAFT)
+  embedding         Unsupported("vector(3)")?
+  reviewedByUserId  String?                   @db.Uuid
+  reviewedAt        DateTime?                 @db.Timestamptz(6)
+  createdAt         DateTime                  @default(now()) @db.Timestamptz(6)
+  textbookEdition   TextbookEdition           @relation(fields: [textbookEditionId], references: [id], onDelete: Cascade)
+  unit              Unit                      @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  knowledgeNode     KnowledgeNode             @relation(fields: [knowledgeNodeId], references: [id], onDelete: Cascade)
+  textbookAsset     TextbookAsset?            @relation(fields: [textbookAssetId], references: [id], onDelete: SetNull)
+  reviewedBy        User?                     @relation(fields: [reviewedByUserId], references: [id], onDelete: SetNull)
+  tutorSteps        TutorStep[]
+
+  @@index([subjectCode, textbookEditionId, unitId, knowledgeNodeId, status])
+  @@index([textbookAssetId, pageStart, pageEnd])
+}
+
+model QuestionBankItem {
+  id                 String                          @id @default(uuid()) @db.Uuid
+  stableKey          String                          @unique @db.VarChar(120)
+  subjectCode        SubjectCode
+  grade              Int
+  textbookEditionId  String                          @db.Uuid
+  unitId             String                          @db.Uuid
+  type               QuestionBankType
+  difficulty         Int
+  abilityLevel       KnowledgeAbilityLevel
+  stem               String                          @db.Text
+  options            Json?
+  answer             Json
+  explanation        String                          @db.Text
+  hints              Json
+  commonErrorTargets Json                            @default("[]")
+  sourceType         QuestionBankSourceType
+  licenseStatus      ContentLicenseStatus
+  sourceReferences   Json                            @default("[]")
+  generationModel    String?                         @db.VarChar(120)
+  promptVersion      String?                         @db.VarChar(80)
+  contentHash        String                          @db.Char(64)
+  dedupeHash         String                          @db.Char(64)
+  version            Int                             @default(1)
+  status             QuestionBankStatus              @default(DRAFT)
+  createdByUserId    String                          @db.Uuid
+  reviewedByUserId   String?                         @db.Uuid
+  reviewedAt         DateTime?                       @db.Timestamptz(6)
+  publishedAt        DateTime?                       @db.Timestamptz(6)
+  createdAt          DateTime                        @default(now()) @db.Timestamptz(6)
+  updatedAt          DateTime                        @updatedAt @db.Timestamptz(6)
+  textbookEdition    TextbookEdition                 @relation(fields: [textbookEditionId], references: [id], onDelete: Cascade)
+  unit               Unit                            @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  createdBy          User                            @relation("QuestionBankItemCreator", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  reviewedBy         User?                           @relation("QuestionBankItemReviewer", fields: [reviewedByUserId], references: [id], onDelete: SetNull)
+  knowledgeLinks     QuestionBankItemKnowledgeNode[]
+  validations        QuestionBankValidation[]
+  reviews            QuestionBankReview[]
+
+  @@index([subjectCode, grade, textbookEditionId, unitId, status])
+  @@index([dedupeHash, status])
+}
+
+model QuestionBankItemKnowledgeNode {
+  questionBankItemId String           @db.Uuid
+  knowledgeNodeId    String           @db.Uuid
+  questionBankItem   QuestionBankItem @relation(fields: [questionBankItemId], references: [id], onDelete: Cascade)
+  knowledgeNode      KnowledgeNode    @relation(fields: [knowledgeNodeId], references: [id], onDelete: Cascade)
+
+  @@id([questionBankItemId, knowledgeNodeId])
+  @@index([knowledgeNodeId, questionBankItemId])
+}
+
+model QuestionBankValidation {
+  id                 String                       @id @default(uuid()) @db.Uuid
+  questionBankItemId String                       @db.Uuid
+  kind               QuestionBankValidationKind
+  status             QuestionBankValidationStatus
+  details            Json
+  createdAt          DateTime                     @default(now()) @db.Timestamptz(6)
+  questionBankItem   QuestionBankItem             @relation(fields: [questionBankItemId], references: [id], onDelete: Cascade)
+
+  @@index([questionBankItemId, kind, createdAt])
+}
+
+model QuestionBankReview {
+  id                 String                     @id @default(uuid()) @db.Uuid
+  questionBankItemId String                     @db.Uuid
+  reviewerUserId     String                     @db.Uuid
+  decision           QuestionBankReviewDecision
+  comment            String                     @db.VarChar(1000)
+  createdAt          DateTime                   @default(now()) @db.Timestamptz(6)
+  questionBankItem   QuestionBankItem           @relation(fields: [questionBankItemId], references: [id], onDelete: Cascade)
+  reviewer           User                       @relation(fields: [reviewerUserId], references: [id], onDelete: Restrict)
+
+  @@index([questionBankItemId, createdAt])
+}
+
+model TutorSession {
+  id                String      @id @default(uuid()) @db.Uuid
+  studentUserId     String      @db.Uuid
+  subjectCode       SubjectCode
+  textbookEditionId String      @db.Uuid
+  unitId            String      @db.Uuid
+  stage             String      @db.VarChar(40)
+  promptVersion     String      @db.VarChar(40)
+  questionText      String      @db.VarChar(5000)
+  createdAt         DateTime    @default(now()) @db.Timestamptz(6)
+  updatedAt         DateTime    @updatedAt @db.Timestamptz(6)
+  student           User        @relation(fields: [studentUserId], references: [id], onDelete: Cascade)
+  steps             TutorStep[]
+
+  @@index([studentUserId, createdAt])
+}
+
+model TutorStep {
+  id          String            @id @default(uuid()) @db.Uuid
+  sessionId   String            @db.Uuid
+  ordinal     Int
+  stage       String            @db.VarChar(40)
+  action      String?           @db.VarChar(40)
+  content     String?           @db.VarChar(5000)
+  response    String            @db.VarChar(5000)
+  evidenceIds Json
+  modelCallId String?           @db.Uuid
+  createdAt   DateTime          @default(now()) @db.Timestamptz(6)
+  session     TutorSession      @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  evidence    ReviewedContent[]
+
+  @@unique([sessionId, ordinal])
+}
+
+enum MistakeCause {
+  KNOWLEDGE_GAP
+  CALCULATION_ERROR
+  MISREAD
+  METHOD_ERROR
+  CARELESS
+  ANSWER_SEEKING
+}
+
+enum MasteryEvidenceKind {
+  INDEPENDENT_ANSWER
+  REVIEW_RESULT
+  EXAM_RESULT
+}
+
+enum MasteryEvidenceStatus {
+  ACCEPTED
+  REVIEW_REQUIRED
+}
+
+model Mistake {
+  id               String            @id @default(uuid()) @db.Uuid
+  studentUserId    String            @db.Uuid
+  subjectCode      SubjectCode
+  knowledgeNodeId  String?           @db.Uuid
+  cause            MistakeCause
+  promptSummary    String            @db.VarChar(1000)
+  createdAt        DateTime          @default(now()) @db.Timestamptz(6)
+  student          User              @relation(fields: [studentUserId], references: [id], onDelete: Cascade)
+  knowledgeNode    KnowledgeNode?    @relation(fields: [knowledgeNodeId], references: [id], onDelete: SetNull)
+  recoveryAttempts RecoveryAttempt[]
+
+  @@index([studentUserId, subjectCode, createdAt])
+}
+
+model RecoveryAttempt {
+  id              String           @id @default(uuid()) @db.Uuid
+  mistakeId       String           @db.Uuid
+  studentUserId   String           @db.Uuid
+  sourceAttemptId String           @unique @db.Uuid
+  correct         Boolean
+  independent     Boolean
+  completedAt     DateTime         @default(now()) @db.Timestamptz(6)
+  mistake         Mistake          @relation(fields: [mistakeId], references: [id], onDelete: Cascade)
+  student         User             @relation(fields: [studentUserId], references: [id], onDelete: Cascade)
+  sourceAttempt   LearningEvidence @relation(fields: [sourceAttemptId], references: [id], onDelete: Restrict)
+}
+
+model MasteryEvidence {
+  id              String                @id @default(uuid()) @db.Uuid
+  studentUserId   String                @db.Uuid
+  subjectCode     SubjectCode
+  knowledgeNodeId String?               @db.Uuid
+  scopeKey        String                @db.VarChar(80)
+  sourceAttemptId String                @unique @db.Uuid
+  type            MasteryEvidenceKind
+  scoreDelta      Int
+  confidence      Float
+  status          MasteryEvidenceStatus
+  createdAt       DateTime              @default(now()) @db.Timestamptz(6)
+  student         User                  @relation(fields: [studentUserId], references: [id], onDelete: Cascade)
+  knowledgeNode   KnowledgeNode?        @relation(fields: [knowledgeNodeId], references: [id], onDelete: SetNull)
+  sourceAttempt   LearningEvidence      @relation(fields: [sourceAttemptId], references: [id], onDelete: Restrict)
+
+  @@index([studentUserId, subjectCode, scopeKey, status, createdAt])
+}
+
+model MasteryState {
+  id              String          @id @default(uuid()) @db.Uuid
+  studentUserId   String          @db.Uuid
+  subjectCode     SubjectCode
+  knowledgeNodeId String?         @db.Uuid
+  scopeKey        String          @db.VarChar(80)
+  score           Int             @default(50)
+  confidence      Float           @default(0)
+  evidenceCount   Int             @default(0)
+  nextReviewAt    DateTime        @db.Timestamptz(6)
+  updatedAt       DateTime        @updatedAt @db.Timestamptz(6)
+  student         User            @relation(fields: [studentUserId], references: [id], onDelete: Cascade)
+  knowledgeNode   KnowledgeNode?  @relation(fields: [knowledgeNodeId], references: [id], onDelete: SetNull)
+  reviewSchedule  ReviewSchedule?
+
+  @@unique([studentUserId, subjectCode, scopeKey])
+  @@index([studentUserId, nextReviewAt])
+}
+
+model ReviewSchedule {
+  id             String       @id @default(uuid()) @db.Uuid
+  masteryStateId String       @unique @db.Uuid
+  dueAt          DateTime     @db.Timestamptz(6)
+  intervalDays   Int
+  active         Boolean      @default(true)
+  masteryState   MasteryState @relation(fields: [masteryStateId], references: [id], onDelete: Cascade)
+
+  @@index([active, dueAt])
+}
+
+enum ExamStatus {
+  DRAFT
+  CONFIRMED
+}
+
+enum ExamLossCause {
+  KNOWLEDGE_GAP
+  CALCULATION_ERROR
+  MISREAD
+  METHOD_ERROR
+  CARELESS
+  TIME_MANAGEMENT
+  UNANSWERED
+  OTHER
+}
+
+model Exam {
+  id                      String            @id @default(uuid()) @db.Uuid
+  studentUserId           String            @db.Uuid
+  createdByUserId         String            @db.Uuid
+  subjectCode             SubjectCode
+  title                   String            @db.VarChar(120)
+  occurredAt              DateTime          @db.Timestamptz(6)
+  status                  ExamStatus        @default(DRAFT)
+  totalScoreHundredths    Int?
+  totalMaxScoreHundredths Int?
+  confirmedAt             DateTime?         @db.Timestamptz(6)
+  createdAt               DateTime          @default(now()) @db.Timestamptz(6)
+  updatedAt               DateTime          @updatedAt @db.Timestamptz(6)
+  student                 User              @relation("ExamStudent", fields: [studentUserId], references: [id], onDelete: Cascade)
+  createdBy               User              @relation("ExamCreator", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  subject                 Subject           @relation(fields: [subjectCode], references: [code], onDelete: Restrict)
+  items                   ExamItem[]
+  remediations            RemediationLink[]
+
+  @@index([studentUserId, subjectCode, occurredAt])
+  @@index([studentUserId, status, occurredAt])
+}
+
+model ExamItem {
+  id                 String           @id @default(uuid()) @db.Uuid
+  examId             String           @db.Uuid
+  ordinal            Int
+  label              String           @db.VarChar(80)
+  scoreHundredths    Int
+  maxScoreHundredths Int
+  knowledgeNodeId    String?          @db.Uuid
+  lossCause          ExamLossCause?
+  exam               Exam             @relation(fields: [examId], references: [id], onDelete: Cascade)
+  knowledgeNode      KnowledgeNode?   @relation(fields: [knowledgeNodeId], references: [id], onDelete: SetNull)
+  remediation        RemediationLink?
+
+  @@unique([examId, ordinal])
+  @@index([knowledgeNodeId])
+}
+
+model RemediationLink {
+  id            String            @id @default(uuid()) @db.Uuid
+  examId        String            @db.Uuid
+  examItemId    String            @unique @db.Uuid
+  studentUserId String            @db.Uuid
+  priority      Int
+  evidenceId    String?           @unique @db.Uuid
+  completedAt   DateTime?         @db.Timestamptz(6)
+  createdAt     DateTime          @default(now()) @db.Timestamptz(6)
+  exam          Exam              @relation(fields: [examId], references: [id], onDelete: Cascade)
+  examItem      ExamItem          @relation(fields: [examItemId], references: [id], onDelete: Cascade)
+  student       User              @relation(fields: [studentUserId], references: [id], onDelete: Cascade)
+  evidence      LearningEvidence? @relation(fields: [evidenceId], references: [id], onDelete: Restrict)
+
+  @@unique([examId, priority])
+  @@index([studentUserId, completedAt])
+}
+
+model WeeklyReport {
+  id            String   @id @default(uuid()) @db.Uuid
+  studentUserId String   @db.Uuid
+  weekStart     DateTime @db.Date
+  weekEnd       DateTime @db.Date
+  summary       Json
+  narrative     String   @db.VarChar(1000)
+  suggestions   Json
+  generatedAt   DateTime @default(now()) @db.Timestamptz(6)
+  student       User     @relation(fields: [studentUserId], references: [id], onDelete: Cascade)
+
+  @@unique([studentUserId, weekStart])
+  @@index([studentUserId, generatedAt])
+}
+
+enum FamilyExportStatus {
+  READY
+  EXPIRED
+  FAILED
+}
+
+enum DeletionRequestType {
+  PERSONAL_GUARDIAN
+  FAMILY
+}
+
+enum DeletionRequestStatus {
+  PENDING
+  COMPLETED
+  FAILED
+}
+
+enum RetentionJobKind {
+  TEMP_OBJECT_PURGE
+  AI_DEBUG_PURGE
+  EXPORT_EXPIRE
+  PERSONAL_PURGE
+  FAMILY_PURGE
+}
+
+enum RetentionJobStatus {
+  PENDING
+  RUNNING
+  SUCCEEDED
+  FAILED
+}
+
+model FamilyExportRequest {
+  id                String             @id @default(uuid()) @db.Uuid
+  familyId          String             @db.Uuid
+  requestedByUserId String             @db.Uuid
+  status            FamilyExportStatus @default(READY)
+  archive           Json?
+  expiresAt         DateTime           @db.Timestamptz(6)
+  createdAt         DateTime           @default(now()) @db.Timestamptz(6)
+
+  @@index([familyId, status, expiresAt])
+}
+
+model DeletionRequest {
+  id                String                @id @default(uuid()) @db.Uuid
+  familyId          String                @db.Uuid
+  requestedByUserId String                @db.Uuid
+  targetUserId      String?               @db.Uuid
+  type              DeletionRequestType
+  status            DeletionRequestStatus @default(PENDING)
+  executeAfter      DateTime              @db.Timestamptz(6)
+  completedAt       DateTime?             @db.Timestamptz(6)
+  lastErrorCode     String?               @db.VarChar(80)
+  createdAt         DateTime              @default(now()) @db.Timestamptz(6)
+  updatedAt         DateTime              @updatedAt @db.Timestamptz(6)
+
+  @@index([familyId, type, status])
+  @@index([targetUserId, status])
+}
+
+model RetentionJob {
+  id             String             @id @default(uuid()) @db.Uuid
+  kind           RetentionJobKind
+  dedupeKey      String             @unique @db.VarChar(160)
+  status         RetentionJobStatus @default(PENDING)
+  attemptCount   Int                @default(0)
+  nextRunAt      DateTime           @default(now()) @db.Timestamptz(6)
+  leaseOwner     String?            @db.VarChar(120)
+  leaseExpiresAt DateTime?          @db.Timestamptz(6)
+  lastErrorCode  String?            @db.VarChar(80)
+  payload        Json
+  createdAt      DateTime           @default(now()) @db.Timestamptz(6)
+  updatedAt      DateTime           @updatedAt @db.Timestamptz(6)
+
+  @@index([status, nextRunAt])
+  @@index([leaseExpiresAt])
+}

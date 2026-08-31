@@ -1,0 +1,804 @@
+.remediation-plan-shell {
+  min-height: 100vh;
+  --ql-accent: var(--ql-text-accent);
+  --ql-accent-soft: color-mix(in srgb, var(--ql-text-accent) 12%, transparent);
+  --ql-content-max: 1250px;
+  --ql-ink: var(--ql-text-primary);
+  --ql-ink-muted: var(--ql-text-secondary);
+  --ql-line: var(--ql-border-subtle);
+  --ql-line-strong: var(--ql-divider);
+  --ql-paper: var(--ql-bg-surface);
+  --ql-sidebar: var(--ql-bg-sidebar);
+  --ql-warn: var(--ql-error);
+}
+
+.remediation-plan-shell .sidebar {
+  padding-left: 22px;
+  padding-right: 18px;
+}
+
+.remediation-plan-shell .sidebar-nav-item {
+  gap: 10px;
+  min-height: 44px;
+  padding-left: 8px;
+  padding-right: 6px;
+}
+
+.remediation-plan-canvas {
+  padding: clamp(18px, 1.8vw, 24px) clamp(20px, 2vw, 24px) clamp(24px, 3vw, 34px);
+}
+
+.remediation-plan-header {
+  align-items: start;
+  gap: 20px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  min-height: 118px;
+  padding-bottom: 12px;
+  padding-top: 14px;
+  position: relative;
+}
+
+.remediation-plan-breadcrumb {
+  color: var(--ql-ink-muted);
+  font-size: 0.84rem;
+  letter-spacing: 0.12em;
+  margin-bottom: 10px;
+}
+
+.remediation-plan-header-title {
+  display: grid;
+  gap: 8px;
+}
+
+.remediation-plan-header-title h1 {
+  color: var(--ql-ink);
+  font-family: var(--ql-font-serif);
+  font-size: clamp(2.04rem, 2.75vw, 2.9rem);
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  line-height: 1.05;
+  margin: 0;
+}
+
+.remediation-plan-header-title p {
+  color: var(--ql-ink);
+  font-size: clamp(0.9rem, 1vw, 1rem);
+  letter-spacing: 0.08em;
+  line-height: 1.8;
+  margin: 0;
+}
+
+.remediation-plan-date {
+  display: grid;
+  gap: 4px;
+  justify-items: end;
+}
+
+.remediation-plan-date strong {
+  font-family: var(--ql-font-serif);
+  font-size: clamp(1.62rem, 2vw, 2rem);
+  font-weight: 500;
+}
+
+.remediation-plan-date span,
+.remediation-plan-date small {
+  color: var(--ql-ink-muted);
+  letter-spacing: 0.08em;
+}
+
+.remediation-plan-date small span {
+  color: var(--ql-accent);
+  font-weight: 600;
+}
+
+.remediation-plan-grid {
+  display: grid;
+  gap: clamp(18px, 2vw, 28px);
+  grid-template-columns: minmax(0, 1fr) 1px minmax(218px, 260px);
+}
+
+.remediation-plan-main {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+
+.remediation-plan-rail-divider {
+  background: var(--ql-line-strong);
+  display: block;
+  min-height: 100%;
+}
+
+.remediation-plan-section-title,
+.remediation-plan-rail-title {
+  align-items: center;
+  display: grid;
+  gap: 6px;
+  justify-items: start;
+}
+
+.remediation-plan-section-title h2,
+.remediation-plan-rail-title h2 {
+  color: var(--ql-ink);
+  font-family: var(--ql-font-serif);
+  font-size: 1.18rem;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  margin: 0;
+}
+
+.remediation-plan-section-title > span,
+.remediation-plan-rail-title > span {
+  background: var(--ql-accent);
+  display: block;
+  height: 2px;
+  width: 36px;
+}
+
+.remediation-plan-summary {
+  border-bottom: 1px solid var(--ql-line-strong);
+  display: grid;
+  gap: 14px;
+  padding-bottom: 14px;
+}
+
+.remediation-plan-summary dl {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin: 0;
+}
+
+.remediation-plan-summary dl div {
+  align-items: baseline;
+  border-left: 1px solid var(--ql-line-strong);
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  min-height: 38px;
+  padding: 0 14px;
+}
+
+.remediation-plan-summary dl div:first-child {
+  border-left: 0;
+}
+
+.remediation-plan-summary dt,
+.remediation-plan-definition-list dt {
+  color: var(--ql-ink-muted);
+  font-size: 0.9rem;
+  letter-spacing: 0.08em;
+}
+
+.remediation-plan-summary dd {
+  color: var(--ql-ink);
+  font-family: var(--ql-font-serif);
+  font-size: 1.18rem;
+  letter-spacing: 0.08em;
+  margin: 0;
+}
+
+.remediation-plan-progress {
+  background: var(--ql-line);
+  block-size: 4px;
+  overflow: hidden;
+}
+
+.remediation-plan-progress span {
+  background: var(--ql-accent);
+  block-size: 100%;
+  display: block;
+}
+
+.remediation-plan-current,
+.remediation-plan-path,
+.remediation-plan-basis {
+  border-bottom: 1px solid var(--ql-line-strong);
+  display: grid;
+  gap: 10px;
+  padding-bottom: 12px;
+}
+
+.remediation-plan-current-body {
+  align-items: start;
+  display: grid;
+  gap: clamp(22px, 2.4vw, 34px);
+  grid-template-columns: 138px minmax(0, 1fr);
+}
+
+.remediation-plan-large-number {
+  display: grid;
+  gap: 10px;
+  justify-items: start;
+  padding-top: 16px;
+}
+
+.remediation-plan-large-number strong {
+  color: var(--ql-accent);
+  font-family: var(--ql-font-serif);
+  font-size: clamp(6.9rem, 9.5vw, 9.6rem);
+  font-weight: 400;
+  letter-spacing: -0.08em;
+  line-height: 0.78;
+}
+
+.remediation-plan-large-number span {
+  color: var(--ql-ink);
+  font-family: var(--ql-font-serif);
+  font-size: 1rem;
+  letter-spacing: 0.12em;
+}
+
+.remediation-plan-current-content {
+  display: grid;
+  gap: 9px;
+  min-width: 0;
+}
+
+.remediation-plan-current-heading {
+  align-items: start;
+  display: grid;
+  gap: 16px;
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.remediation-plan-current-heading h3 {
+  color: var(--ql-ink);
+  font-family: var(--ql-font-serif);
+  font-size: clamp(1.34rem, 1.8vw, 1.78rem);
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  line-height: 1.25;
+  margin: 0;
+}
+
+.remediation-plan-current-heading p,
+.remediation-plan-rationale,
+.remediation-plan-task-boundary,
+.remediation-plan-basis p,
+.remediation-plan-actions p,
+.remediation-plan-action-message,
+.remediation-plan-source-boundary {
+  color: var(--ql-ink-muted);
+  font-size: 0.92rem;
+  letter-spacing: 0.06em;
+  line-height: 1.55;
+  margin: 0;
+}
+
+.remediation-plan-current-heading strong {
+  color: var(--ql-ink);
+  font-family: var(--ql-font-serif);
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  white-space: nowrap;
+}
+
+.remediation-plan-substeps {
+  border-top: 1px solid var(--ql-line-strong);
+  list-style: none;
+  margin: 2px 0 0;
+  padding: 0;
+}
+
+.remediation-plan-substeps li {
+  align-items: baseline;
+  border-bottom: 1px solid var(--ql-line);
+  display: grid;
+  gap: 8px 18px;
+  grid-template-columns: minmax(140px, 0.75fr) minmax(92px, 0.34fr) minmax(0, 1.1fr);
+  min-height: 42px;
+  padding: 8px 0;
+}
+
+.remediation-plan-substeps span,
+.remediation-plan-substeps strong,
+.remediation-plan-substeps p {
+  color: var(--ql-ink);
+  font-family: var(--ql-font-serif);
+  font-size: 0.98rem;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  line-height: 1.4;
+  margin: 0;
+}
+
+.remediation-plan-substeps strong {
+  color: var(--ql-ink-muted);
+}
+
+.remediation-plan-evidence-state {
+  color: var(--ql-ink);
+  font-family: var(--ql-font-serif);
+  letter-spacing: 0.08em;
+  line-height: 1.45;
+  margin: 0;
+}
+
+.remediation-plan-current-actions,
+.remediation-plan-actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+}
+
+.remediation-plan-primary-action,
+.remediation-plan-secondary-action,
+.remediation-plan-outline-action,
+.remediation-plan-text-action {
+  align-items: center;
+  border-radius: 2px;
+  display: inline-flex;
+  font: inherit;
+  gap: 10px;
+  justify-content: center;
+  letter-spacing: 0.12em;
+  min-height: 44px;
+  padding: 0 34px;
+  text-decoration: none;
+  transition: background-color 140ms ease, border-color 140ms ease, color 140ms ease, transform 140ms ease;
+}
+
+.remediation-plan-primary-action {
+  background: var(--ql-accent);
+  border: 1px solid var(--ql-accent);
+  color: var(--ql-paper);
+}
+
+.remediation-plan-primary-action:hover .ql-icon {
+  transform: translateX(3px);
+}
+
+.remediation-plan-primary-action:active,
+.remediation-plan-secondary-action:active,
+.remediation-plan-outline-action:active,
+.remediation-plan-text-action:active {
+  transform: translateY(1px);
+}
+
+.remediation-plan-secondary-action,
+.remediation-plan-outline-action {
+  background: transparent;
+  border: 1px solid var(--ql-accent);
+  color: var(--ql-accent);
+}
+
+.remediation-plan-text-action {
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--ql-accent);
+}
+
+.remediation-plan-primary-action:focus-visible,
+.remediation-plan-secondary-action:focus-visible,
+.remediation-plan-outline-action:focus-visible,
+.remediation-plan-text-action:focus-visible,
+.remediation-plan-action-message:focus-visible {
+  outline: 2px solid var(--ql-accent);
+  outline-offset: 3px;
+}
+
+.remediation-plan-task-explanation {
+  background: var(--ql-accent-soft);
+  border: 1px solid var(--ql-line-strong);
+  display: grid;
+  gap: 8px;
+  padding: 12px 14px;
+}
+
+.remediation-plan-task-explanation h3 {
+  color: var(--ql-ink);
+  font-family: var(--ql-font-serif);
+  font-size: 1.08rem;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  margin: 0;
+}
+
+.remediation-plan-task-explanation p {
+  color: var(--ql-ink);
+  letter-spacing: 0.06em;
+  line-height: 1.55;
+  margin: 0;
+}
+
+.remediation-plan-task-explanation dl,
+.remediation-plan-definition-list {
+  display: grid;
+  gap: 5px;
+  margin: 0;
+}
+
+.remediation-plan-task-explanation dl div,
+.remediation-plan-definition-list div {
+  display: grid;
+  gap: 4px;
+  grid-template-columns: minmax(92px, 0.7fr) minmax(0, 1fr);
+}
+
+.remediation-plan-task-explanation dt {
+  color: var(--ql-ink-muted);
+  font-size: 0.86rem;
+  letter-spacing: 0.08em;
+}
+
+.remediation-plan-task-explanation dd,
+.remediation-plan-definition-list dd {
+  color: var(--ql-ink);
+  font-size: 0.92rem;
+  line-height: 1.38;
+  margin: 0;
+}
+
+.remediation-plan-path ol {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.remediation-plan-path-item {
+  align-items: center;
+  border-bottom: 1px solid var(--ql-line);
+  display: grid;
+  gap: 8px 18px;
+  grid-template-columns: 54px minmax(220px, 1.1fr) minmax(150px, 0.72fr) minmax(190px, 0.9fr);
+  min-height: 58px;
+  position: relative;
+}
+
+.remediation-plan-path-item::before {
+  background: var(--ql-line-strong);
+  block-size: 100%;
+  content: "";
+  inline-size: 2px;
+  inset-block-start: 0;
+  inset-inline-start: 18px;
+  position: absolute;
+}
+
+.remediation-plan-path-item:first-child::before {
+  inset-block-start: 50%;
+}
+
+.remediation-plan-path-item:last-child::before {
+  block-size: 50%;
+}
+
+.remediation-plan-path-marker {
+  align-items: center;
+  background: var(--ql-ink-muted);
+  border-radius: 999px;
+  color: var(--ql-paper);
+  display: inline-flex;
+  font-family: var(--ql-font-serif);
+  font-size: 1.16rem;
+  block-size: 38px;
+  inline-size: 38px;
+  justify-content: center;
+  position: relative;
+  z-index: 1;
+}
+
+.remediation-plan-path-item.is-completed .remediation-plan-path-marker,
+.remediation-plan-path-item.is-current .remediation-plan-path-marker {
+  background: var(--ql-accent);
+}
+
+.remediation-plan-path-topic h3 {
+  color: var(--ql-ink);
+  font-family: var(--ql-font-serif);
+  font-size: 1.02rem;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  line-height: 1.35;
+  margin: 0;
+}
+
+.remediation-plan-path-topic p,
+.remediation-plan-path-item span,
+.remediation-plan-path-item strong {
+  color: var(--ql-ink);
+  font-family: var(--ql-font-serif);
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  line-height: 1.4;
+  margin: 0;
+}
+
+.remediation-plan-path-item.is-completed strong,
+.remediation-plan-path-item.is-current strong {
+  color: var(--ql-accent);
+}
+
+.remediation-plan-path-item.is-locked .remediation-plan-path-topic h3,
+.remediation-plan-path-item.is-locked .remediation-plan-path-topic p,
+.remediation-plan-path-item.is-locked span,
+.remediation-plan-path-item.is-locked strong {
+  color: var(--ql-ink-muted);
+}
+
+.remediation-plan-basis .remediation-plan-definition-list {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.remediation-plan-actions {
+  border-bottom: 1px solid var(--ql-line-strong);
+  padding-bottom: 12px;
+}
+
+.remediation-plan-actions p {
+  margin-left: auto;
+}
+
+.remediation-plan-action-message {
+  color: var(--ql-accent);
+  min-height: 1.6em;
+}
+
+.remediation-plan-action-message:empty::before {
+  content: "\00a0";
+}
+
+.remediation-plan-source-boundary {
+  border-top: 1px solid var(--ql-line);
+  padding-top: 10px;
+}
+
+.remediation-plan-rail {
+  align-self: start;
+  display: grid;
+  gap: 14px;
+  grid-auto-rows: max-content;
+  min-width: 0;
+}
+
+.remediation-plan-rail-section {
+  display: grid;
+  gap: 8px;
+}
+
+.remediation-plan-rail-section + .remediation-plan-rail-section {
+  border-top: 1px solid var(--ql-line-strong);
+  padding-top: 14px;
+}
+
+.remediation-plan-rail-title h2 {
+  font-size: 1rem;
+}
+
+.remediation-plan-service-code {
+  color: var(--ql-warn);
+  font-size: 0.82rem;
+  letter-spacing: 0.04em;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.remediation-plan-mobile-menu,
+.remediation-plan-collapsible {
+  display: none;
+}
+
+.remediation-plan-loading {
+  min-height: 560px;
+}
+
+@media (max-width: 1100px) {
+  .remediation-plan-canvas {
+    padding-left: clamp(20px, 3vw, 28px);
+    padding-right: clamp(20px, 3vw, 28px);
+  }
+
+  .remediation-plan-grid {
+    grid-template-columns: minmax(0, 1fr) 1px minmax(200px, 230px);
+  }
+
+  .remediation-plan-path-item {
+    grid-template-columns: 48px minmax(180px, 1fr) minmax(130px, 0.72fr) minmax(150px, 0.86fr);
+  }
+
+  .remediation-plan-substeps li {
+    grid-template-columns: minmax(116px, 0.7fr) minmax(86px, 0.34fr) minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 959px) {
+  .remediation-plan-header {
+    grid-template-columns: 1fr;
+  }
+
+  .remediation-plan-date {
+    justify-items: start;
+  }
+
+  .remediation-plan-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .remediation-plan-summary dl {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    row-gap: 12px;
+  }
+
+  .remediation-plan-summary dl div:nth-child(odd) {
+    border-left: 0;
+  }
+
+  .remediation-plan-rail,
+  .remediation-plan-rail-divider {
+    display: none;
+  }
+
+  .remediation-plan-collapsible {
+    border-top: 1px solid var(--ql-line-strong);
+    display: block;
+    padding-top: 12px;
+  }
+
+  .remediation-plan-collapsible summary {
+    color: var(--ql-accent);
+    cursor: pointer;
+    letter-spacing: 0.08em;
+    min-height: 44px;
+  }
+
+  .remediation-plan-collapsible-content .remediation-plan-rail {
+    display: grid;
+    margin-top: 12px;
+  }
+
+  .remediation-plan-current-body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .remediation-plan-large-number {
+    align-items: end;
+    display: flex;
+    gap: 16px;
+    padding-top: 2px;
+  }
+
+  .remediation-plan-large-number span {
+    padding-bottom: 10px;
+  }
+
+  .remediation-plan-path-item {
+    align-items: start;
+    grid-template-columns: 48px minmax(0, 1fr);
+    padding: 10px 0;
+  }
+
+  .remediation-plan-path-item > strong,
+  .remediation-plan-path-item > span:not(.remediation-plan-path-marker) {
+    grid-column: 2 / -1;
+  }
+
+  .remediation-plan-actions p {
+    margin-left: 0;
+  }
+}
+
+@media (max-width: 767px) {
+  .remediation-plan-shell {
+    display: block;
+  }
+
+  .remediation-plan-shell > .sidebar {
+    display: none;
+  }
+
+  .remediation-plan-mobile-menu {
+    display: block;
+    padding: 12px 16px 0;
+  }
+
+  .remediation-plan-mobile-menu > summary {
+    align-items: center;
+    background: var(--ql-sidebar);
+    color: var(--ql-paper);
+    display: flex;
+    justify-content: space-between;
+    list-style: none;
+    min-height: 56px;
+    padding: 0 16px;
+  }
+
+  .remediation-plan-mobile-menu > summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .remediation-plan-mobile-menu > summary > span {
+    display: grid;
+    gap: 2px;
+  }
+
+  .remediation-plan-mobile-menu strong {
+    font-family: var(--ql-font-serif);
+    font-size: 1.08rem;
+    font-weight: 500;
+    letter-spacing: 0.16em;
+  }
+
+  .remediation-plan-mobile-menu small {
+    color: color-mix(in srgb, var(--ql-paper) 72%, transparent);
+    letter-spacing: 0.12em;
+  }
+
+  .remediation-plan-mobile-menu[open] > summary .ql-icon {
+    transform: rotate(90deg);
+  }
+
+  .remediation-plan-mobile-menu nav {
+    background: color-mix(in srgb, var(--ql-sidebar) 96%, black);
+    display: grid;
+    padding: 10px 16px 16px;
+  }
+
+  .remediation-plan-mobile-menu a,
+  .remediation-plan-mobile-menu nav span {
+    color: var(--ql-paper);
+    letter-spacing: 0.12em;
+    min-height: 42px;
+    padding: 10px 0;
+    text-decoration: none;
+  }
+
+  .remediation-plan-mobile-menu [aria-current="page"] {
+    color: var(--ql-accent);
+  }
+
+  .remediation-plan-canvas {
+    padding: 18px 18px 32px;
+  }
+
+  .remediation-plan-summary dl {
+    grid-template-columns: 1fr;
+  }
+
+  .remediation-plan-summary dl div,
+  .remediation-plan-summary dl div:nth-child(odd) {
+    border-left: 0;
+    border-top: 1px solid var(--ql-line);
+    justify-content: start;
+    min-height: 44px;
+    padding: 10px 0 0;
+  }
+
+  .remediation-plan-large-number strong {
+    font-size: clamp(4.7rem, 22vw, 6.6rem);
+  }
+
+  .remediation-plan-current-heading,
+  .remediation-plan-substeps li,
+  .remediation-plan-task-explanation dl div,
+  .remediation-plan-definition-list div {
+    grid-template-columns: 1fr;
+  }
+
+  .remediation-plan-current-actions,
+  .remediation-plan-actions,
+  .remediation-plan-primary-action,
+  .remediation-plan-secondary-action,
+  .remediation-plan-outline-action,
+  .remediation-plan-text-action {
+    width: 100%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .remediation-plan-primary-action,
+  .remediation-plan-secondary-action,
+  .remediation-plan-outline-action,
+  .remediation-plan-text-action,
+  .remediation-plan-primary-action .ql-icon {
+    transition: none;
+  }
+
+  .remediation-plan-primary-action:hover .ql-icon,
+  .remediation-plan-primary-action:active,
+  .remediation-plan-secondary-action:active,
+  .remediation-plan-outline-action:active,
+  .remediation-plan-text-action:active {
+    transform: none;
+  }
+}

@@ -1,0 +1,83 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    name: quality
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: pgvector/pgvector:0.8.6-pg18-trixie
+        env:
+          POSTGRES_DB: study
+          POSTGRES_USER: study
+          POSTGRES_PASSWORD: study_local_only
+          TZ: UTC
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd "pg_isready -U study -d study"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
+    env:
+      NODE_ENV: test
+      DATABASE_URL: postgresql://study:study_local_only@127.0.0.1:5433/study?schema=public
+      API_HOST: 127.0.0.1
+      API_PORT: 3001
+      ALLOWED_ORIGINS: http://127.0.0.1:3000
+      SESSION_COOKIE_NAME: study_session
+      SESSION_COOKIE_SECURE: "false"
+      REAUTH_PROOF_SECRET: ci-only-reauth-secret
+      INVITATION_TOKEN_SECRET: ci-only-invitation-secret
+      MODEL_PROVIDER: fake
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+
+      - name: Set up Node.js
+        uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version: 24.15.0
+          package-manager-cache: false
+
+      - name: Enable pnpm
+        run: |
+          corepack enable
+          corepack prepare pnpm@11.21.0 --activate
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Apply database migrations
+        run: pnpm --filter @study/api prisma:migrate:deploy
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Test
+        run: pnpm test
+
+      - name: API end-to-end tests
+        run: pnpm test:e2e
+
+      - name: Build
+        run: pnpm build

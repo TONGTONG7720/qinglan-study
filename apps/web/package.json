@@ -1,0 +1,32 @@
+{
+  "name": "@study/web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.json --noEmit && vite build",
+    "build:qa": "tsc -p tsconfig.json --noEmit && vite build --mode qa --outDir dist-qa",
+    "dev": "vite",
+    "lint": "eslint \"src/**/*.{ts,tsx}\" \"vite.config.ts\"",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@fontsource/ibm-plex-mono": "5.3.0",
+    "@study/contracts": "workspace:*",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
+    "react-router-dom": "7.18.2"
+  },
+  "devDependencies": {
+    "@testing-library/jest-dom": "7.0.1",
+    "@testing-library/react": "16.3.2",
+    "@types/react": "19.2.18",
+    "@types/react-dom": "19.2.4",
+    "@vitejs/plugin-react": "6.1.0",
+    "jsdom": "30.0.1",
+    "vite": "8.2.2",
+    "vitest": "4.1.11"
+  }
+}

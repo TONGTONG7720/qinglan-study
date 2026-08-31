@@ -1,0 +1,30 @@
+{
+  "name": "chaozhou-family-learning-backend",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@11.21.0",
+  "engines": {
+    "node": ">=24.15.0 <25"
+  },
+  "scripts": {
+    "dev": "pnpm --filter @study/api dev",
+    "dev:api": "pnpm --filter @study/api dev",
+    "dev:web": "pnpm --filter @study/web dev",
+    "lint": "pnpm -r --workspace-concurrency=1 lint && node scripts/forbidden-patterns.mjs",
+    "typecheck": "pnpm -r --workspace-concurrency=1 typecheck",
+    "test": "node --test scripts/workspace.test.mjs && pnpm -r --workspace-concurrency=1 test",
+    "test:e2e": "pnpm --filter @study/api test:e2e",
+    "test:product-prototypes": "node scripts/check-product-prototypes.mjs typecheck",
+    "build:product-prototypes": "node scripts/check-product-prototypes.mjs build",
+    "build": "pnpm -r --workspace-concurrency=1 build"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "eslint": "10.8.1",
+    "eslint-plugin-react-hooks": "7.1.1",
+    "eslint-plugin-react-refresh": "0.5.4",
+    "globals": "17.11.0",
+    "typescript": "5.9.3",
+    "typescript-eslint": "8.67.0"
+  }
+}
