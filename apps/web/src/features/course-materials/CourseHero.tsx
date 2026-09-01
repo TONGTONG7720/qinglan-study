@@ -3,10 +3,11 @@ import type { CourseSummary } from "./types";
 
 export interface CourseHeroProps {
   readonly course: CourseSummary;
+  readonly detailsAvailable?: boolean;
   readonly onEnter: (course: CourseSummary) => void;
 }
 
-export function CourseHero({ course, onEnter }: CourseHeroProps) {
+export function CourseHero({ course, detailsAvailable = true, onEnter }: CourseHeroProps) {
   return (
     <article className="course-hero" aria-labelledby="featured-course-title">
       <div className="course-hero-mark" aria-hidden="true">
@@ -30,9 +31,9 @@ export function CourseHero({ course, onEnter }: CourseHeroProps) {
         </div>
       </div>
 
-      <button className="primary-button" onClick={() => { onEnter(course); }} type="button">
-        <span>进入课程</span>
-        <Icon name="arrowRight" size={18} />
+      <button className="primary-button" disabled={!detailsAvailable} onClick={() => { onEnter(course); }} type="button">
+        <span>{detailsAvailable ? "进入课程" : "课程详情暂未开放"}</span>
+        <Icon name={detailsAvailable ? "arrowRight" : "shieldCheck"} size={18} />
       </button>
     </article>
   );

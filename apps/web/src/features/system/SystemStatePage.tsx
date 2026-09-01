@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 
 import { Icon } from "../../components/Icon";
 
-export type SystemStateKind = "not-found" | "session-expired" | "offline" | "error";
+export type SystemStateKind = "not-found" | "session-expired" | "offline" | "error" | "limited-release";
 
 const stateCopy: Readonly<Record<SystemStateKind, {
   readonly eyebrow: string;
@@ -45,6 +45,14 @@ const stateCopy: Readonly<Record<SystemStateKind, {
     primaryLabel: "返回安全首页",
     primaryTarget: "/",
   },
+  "limited-release": {
+    eyebrow: "首发范围 / READ-ONLY BETA",
+    title: "此功能暂未开放",
+    description: "当前邀请制只读 Beta 仅开放登录、本人今日学习、课程与教材概览。此入口不会读取未接入的数据，也不会执行、排队或重放写操作。",
+    code: "READ_ONLY_BETA",
+    primaryLabel: "返回今日学习",
+    primaryTarget: "/student/today",
+  },
 };
 
 export function SystemStatePage({ kind }: { readonly kind: SystemStateKind }) {
@@ -58,8 +66,8 @@ export function SystemStatePage({ kind }: { readonly kind: SystemStateKind }) {
           <i aria-hidden="true">清朗</i>
         </div>
         <div>
-          <p>{kind === "offline" ? "连接已断" : kind === "error" ? "错误已收" : "只守边界"}</p>
-          <strong>{kind === "offline" ? "状态不清" : kind === "error" ? "信息已净" : "安全返回"}</strong>
+          <p>{kind === "offline" ? "连接已断" : kind === "error" ? "错误已收" : kind === "limited-release" ? "首发收口" : "只守边界"}</p>
+          <strong>{kind === "offline" ? "状态不清" : kind === "error" ? "信息已净" : kind === "limited-release" ? "只读开放" : "安全返回"}</strong>
         </div>
       </section>
       <section className="system-content" aria-labelledby="system-state-title">
@@ -68,7 +76,7 @@ export function SystemStatePage({ kind }: { readonly kind: SystemStateKind }) {
           <code>{copy.code}</code>
         </header>
         <div className="system-status-strip">
-          <span>敏感详情　未展示</span>
+          <span>{kind === "limited-release" ? "首发范围　邀请制只读" : "敏感详情　未展示"}</span>
           <span>最近写操作　未重放</span>
           <span>权限范围　服务端确认</span>
         </div>

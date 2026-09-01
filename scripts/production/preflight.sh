@@ -35,7 +35,7 @@ require_value() {
 for variable_name in \
   IMAGE_TAG INFRA_IMAGE_TAG DEPLOY_OWNER_USER DEPLOY_OWNER_GROUP SITE_ADDRESS ACME_EMAIL \
   ALLOWED_ORIGINS SESSION_COOKIE_NAME REQUEST_BODY_LIMIT_BYTES CSRF_PROTECTION_ENABLED \
-  VITE_ENABLE_DEMO_COURSE_CATALOG VITE_QA_DEMO_BUILD \
+  VITE_ENABLE_DEMO_COURSE_CATALOG VITE_QA_DEMO_BUILD VITE_RELEASE_SCOPE \
   MODEL_PROVIDER OBJECT_STORAGE_PROVIDER EMAIL_PROVIDER \
   EXPECTED_MIGRATION_NAME \
   POSTGRES_DB BACKUP_SHARED_GID \
@@ -103,6 +103,10 @@ fi
 if [ "$VITE_ENABLE_DEMO_COURSE_CATALOG" != "false" ] \
   || [ "$VITE_QA_DEMO_BUILD" != "false" ]; then
   echo "production deployment must disable every Web demo and QA build flag" >&2
+  exit 78
+fi
+if [ "$VITE_RELEASE_SCOPE" != "READ_ONLY_BETA" ]; then
+  echo "production deployment must use VITE_RELEASE_SCOPE=READ_ONLY_BETA until full vertical services are verified" >&2
   exit 78
 fi
 if [ "$OBJECT_STORAGE_PROVIDER" != "disabled" ]; then

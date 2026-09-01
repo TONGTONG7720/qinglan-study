@@ -435,9 +435,13 @@
   text-decoration: none;
 }
 
-.home-course-link:hover {
+.home-course-link:not(.is-disabled):hover {
   border-bottom-color: var(--ql-action-primary);
   color: var(--ql-action-primary-hover);
+}
+
+.home-course-link.is-disabled {
+  color: var(--ql-text-secondary);
 }
 
 .home-rail-collapsible {

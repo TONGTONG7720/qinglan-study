@@ -2,11 +2,27 @@ import { fireEvent, render, screen, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it } from "vitest";
 
+import { ReleaseScopeProvider } from "../../config/release-scope";
 import { demoCourseCatalog } from "./demo-data";
 import { CourseMaterialsView } from "./CourseMaterialsPage";
 import type { CourseCatalog } from "./types";
 
 describe("course materials page", () => {
+  it("keeps the Beta catalog read-only and disables unlaunched course details", () => {
+    render(
+      <MemoryRouter initialEntries={["/student/learn?grade=8&term=SPRING"]}>
+        <ReleaseScopeProvider scope="READ_ONLY_BETA">
+          <CourseMaterialsView catalog={demoCourseCatalog} currentUser={{ status: "anonymous" }} />
+        </ReleaseScopeProvider>
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByText("邀请制只读 Beta")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "课程详情暂未开放" })).toBeDisabled();
+    expect(screen.queryByRole("link", { name: "AI 辅导" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "错题复习" })).not.toBeInTheDocument();
+  });
+
   it("renders the labelled development catalog and updates selected course state", async () => {
     render(
       <MemoryRouter initialEntries={["/student/learn?grade=8&term=SPRING"]}>

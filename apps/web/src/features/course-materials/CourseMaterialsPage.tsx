@@ -35,6 +35,7 @@ import type { CurrentUserResult } from "../../api/auth";
 import { Icon } from "../../components/Icon";
 import { Sidebar } from "../../components/Sidebar";
 import { StatusPanel } from "../../components/StatusPanel";
+import { useReleaseScope } from "../../config/release-scope";
 import { useDocumentMetadata } from "../../hooks/use-document-metadata";
 import { CourseFilters, CourseTable } from "./CourseTable";
 import { CourseHero } from "./CourseHero";
@@ -276,6 +277,7 @@ export interface CourseMaterialsViewProps {
 }
 
 export function CourseMaterialsView({ catalog, currentUser }: CourseMaterialsViewProps) {
+  const releaseScope = useReleaseScope();
   const [searchParams, setSearchParams] = useSearchParams();
   const [recentExpanded, setRecentExpanded] = useState(false);
   const [announcement, setAnnouncement] = useState<string | null>(null);
@@ -343,6 +345,10 @@ export function CourseMaterialsView({ catalog, currentUser }: CourseMaterialsVie
   }
 
   function enterCourse(course: CourseSummary): void {
+    if (releaseScope === "READ_ONLY_BETA") {
+      setAnnouncement("当前只读 Beta 仅开放课程与教材概览，课程详情暂未开放。");
+      return;
+    }
     const next = new URLSearchParams(searchParams);
     next.set("subject", course.subjectCode);
     next.set("view", "subject-detail");
@@ -1512,7 +1518,7 @@ export function CourseMaterialsView({ catalog, currentUser }: CourseMaterialsVie
                 title="暂无课程"
               />
             ) : (
-              <CourseHero course={featuredCourse} onEnter={enterCourse} />
+              <CourseHero course={featuredCourse} detailsAvailable={releaseScope === "FULL_PREVIEW"} onEnter={enterCourse} />
             )}
 
             <span className="content-divider" aria-hidden="true" />

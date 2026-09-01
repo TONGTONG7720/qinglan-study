@@ -9,6 +9,7 @@ import type { CurrentUserResult } from "../../api/auth";
 import { Icon } from "../../components/Icon";
 import { Sidebar } from "../../components/Sidebar";
 import { StatusPanel } from "../../components/StatusPanel";
+import { useReleaseScope } from "../../config/release-scope";
 import { useShanghaiDateTime } from "../course-materials/use-shanghai-date-time";
 import { useDocumentMetadata } from "../../hooks/use-document-metadata";
 import type { StudentHomeResult, StudentHomeSnapshot } from "./types";
@@ -59,17 +60,20 @@ function HomeSectionTitle({ title, caption }: { readonly title: string; readonly
 }
 
 function StudentHomeMobileNav() {
+  const releaseScope = useReleaseScope();
   return (
     <details className="home-mobile-nav">
       <summary><span><strong>清朗学习</strong><small>今日学习</small></span><Icon name="chevronRight" size={18} /></summary>
       <nav aria-label="移动端学习功能">
         <Link to="/student/today">今日学习</Link>
         <Link to="/student/learn">课程与资料</Link>
-        <Link to="/student/plans">每日任务</Link>
-        <Link to="/student/questions">AI 辅导</Link>
-        <Link to="/student/wrong-book">错题复习</Link>
-        <Link to="/student/mastery">掌握证据</Link>
-        <Link to="/student/exams">考试与评估</Link>
+        {releaseScope === "FULL_PREVIEW" ? <>
+          <Link to="/student/plans">每日任务</Link>
+          <Link to="/student/questions">AI 辅导</Link>
+          <Link to="/student/wrong-book">错题复习</Link>
+          <Link to="/student/mastery">掌握证据</Link>
+          <Link to="/student/exams">考试与评估</Link>
+        </> : null}
       </nav>
     </details>
   );
@@ -109,6 +113,7 @@ function TodayTaskRow({
 }
 
 function HomeRailContent({ snapshot }: { readonly snapshot: StudentHomeSnapshot }) {
+  const releaseScope = useReleaseScope();
   const fixture = snapshot.source === "DEVELOPMENT_FIXTURE";
   const evidence = fixture
     ? ["数学课堂笔记", "二次函数图像练习", "语文阅读摘抄", "英语单词听写记录"]
@@ -137,7 +142,9 @@ function HomeRailContent({ snapshot }: { readonly snapshot: StudentHomeSnapshot 
       <section className="home-rail-section">
         <HomeSectionTitle title="家庭周报" />
         <p className="home-rail-copy">周报只读取服务端确认的聚合事实；当前没有可展示的真实周报。</p>
-        <Link className="home-course-link" to="/guardian/overview"><span>查看家庭支持边界</span><Icon name="arrowRight" size={16} /></Link>
+        {releaseScope === "READ_ONLY_BETA"
+          ? <span className="home-course-link is-disabled" aria-disabled="true"><span>家长端暂未开放</span><Icon name="shieldCheck" size={16} /></span>
+          : <Link className="home-course-link" to="/guardian/overview"><span>查看家庭支持边界</span><Icon name="arrowRight" size={16} /></Link>}
       </section>
     </>
   );
@@ -149,6 +156,7 @@ export interface StudentHomeViewProps {
 }
 
 export function StudentHomeView({ snapshot, currentUser }: StudentHomeViewProps) {
+  const releaseScope = useReleaseScope();
   const [searchParams, setSearchParams] = useSearchParams();
   const [announcement, setAnnouncement] = useState<string | null>(null);
   const dateTime = useShanghaiDateTime();
@@ -230,11 +238,11 @@ export function StudentHomeView({ snapshot, currentUser }: StudentHomeViewProps)
                   <h2 id="today-plan-title">{selectedTask.title}</h2>
                   <p>{snapshot.currentCourse.subjectLabel} · {snapshot.currentCourse.textbookLabel} · {snapshot.currentCourse.currentPosition}</p>
                   <p className="home-priority-goal">学习目标：完成当前服务端计划任务，并保留可追溯的任务范围。</p>
-                  <button className="primary-button" data-od-id="home-start-task" disabled={selectedTask.status === "COMPLETED"} onClick={() => {
+                  <button className="primary-button" data-od-id="home-start-task" disabled={selectedTask.status === "COMPLETED" || releaseScope === "READ_ONLY_BETA"} onClick={() => {
                     startTask(selectedTask);
                   }} type="button">
-                    <span>{selectedTask.status === "COMPLETED" ? "已完成" : "继续学习"}</span>
-                    <Icon name={selectedTask.status === "COMPLETED" ? "check" : "arrowRight"} size={18} />
+                    <span>{selectedTask.status === "COMPLETED" ? "已完成" : releaseScope === "READ_ONLY_BETA" ? "任务学习暂未开放" : "继续学习"}</span>
+                    <Icon name={selectedTask.status === "COMPLETED" ? "check" : releaseScope === "READ_ONLY_BETA" ? "shieldCheck" : "arrowRight"} size={18} />
                   </button>
                 </div>
               </article>
