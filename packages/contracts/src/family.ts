@@ -106,10 +106,18 @@ export const CreateStudentInputSchema = z
 export type CreateStudentInput = z.infer<typeof CreateStudentInputSchema>;
 
 const ConsentPolicyVersionSchema = z.string().trim().min(1).max(40);
+const ConsentPolicyUrlSchema = z
+  .url()
+  .refine((value) => new URL(value).protocol === "https:", "policyUrl must use HTTPS");
+const ConsentPolicyDocumentSha256Schema = z
+  .string()
+  .regex(/^[a-f0-9]{64}$/u);
 
 export const GrantStudentConsentInputSchema = z
   .object({
     policyVersion: ConsentPolicyVersionSchema,
+    policyUrl: ConsentPolicyUrlSchema,
+    policyDocumentSha256: ConsentPolicyDocumentSha256Schema,
     confirmation: z.literal("GRANT_STUDENT_CONSENT"),
   })
   .strict();
@@ -221,10 +229,16 @@ export const StudentConsentSchema = z
     guardianUserId: UuidSchema,
     studentUserId: UuidSchema,
     policyVersion: ConsentPolicyVersionSchema,
+    policyUrl: ConsentPolicyUrlSchema.nullable(),
+    policyDocumentSha256: ConsentPolicyDocumentSha256Schema.nullable(),
     grantedAt: z.iso.datetime(),
     revokedAt: z.iso.datetime().nullable(),
   })
-  .strict();
+  .strict()
+  .refine(
+    (value) => (value.policyUrl === null) === (value.policyDocumentSha256 === null),
+    "policyUrl and policyDocumentSha256 must both be present or both be null",
+  );
 export type StudentConsent = z.infer<typeof StudentConsentSchema>;
 
 export const FamilyMemberSchema = z

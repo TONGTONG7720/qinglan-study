@@ -13,6 +13,7 @@ import {
   RemoveMemberInputSchema,
   RevokeGuardianRelationInputSchema,
   RevokeStudentConsentInputSchema,
+  StudentConsentSchema,
 } from "./family.js";
 
 const familyId = "018f0f4e-2a5d-7aa0-8d44-a533e0b1092c";
@@ -114,11 +115,27 @@ describe("Phase 3 family contracts", () => {
   it("requires an explicit policy version and action-specific consent confirmations", () => {
     expect(GrantStudentConsentInputSchema.safeParse({
       policyVersion: "PRIVACY_POLICY_2026_V1",
+      policyUrl: "https://policy.example.test/privacy/2026-v1",
+      policyDocumentSha256: "a".repeat(64),
       confirmation: "GRANT_STUDENT_CONSENT",
     }).success).toBe(true);
     expect(GrantStudentConsentInputSchema.safeParse({
       policyVersion: "PRIVACY_POLICY_2026_V1",
+      policyUrl: "https://policy.example.test/privacy/2026-v1",
+      policyDocumentSha256: "a".repeat(64),
       confirmation: "REVOKE_STUDENT_CONSENT",
+    }).success).toBe(false);
+    expect(GrantStudentConsentInputSchema.safeParse({
+      policyVersion: "PRIVACY_POLICY_2026_V1",
+      policyUrl: "http://policy.example.test/privacy/2026-v1",
+      policyDocumentSha256: "a".repeat(64),
+      confirmation: "GRANT_STUDENT_CONSENT",
+    }).success).toBe(false);
+    expect(GrantStudentConsentInputSchema.safeParse({
+      policyVersion: "PRIVACY_POLICY_2026_V1",
+      policyUrl: "https://policy.example.test/privacy/2026-v1",
+      policyDocumentSha256: "not-a-sha256",
+      confirmation: "GRANT_STUDENT_CONSENT",
     }).success).toBe(false);
     expect(RevokeStudentConsentInputSchema.safeParse({
       policyVersion: "PRIVACY_POLICY_2026_V1",
@@ -127,6 +144,24 @@ describe("Phase 3 family contracts", () => {
     expect(RevokeStudentConsentInputSchema.safeParse({
       policyVersion: "",
       confirmation: "REVOKE_STUDENT_CONSENT",
+    }).success).toBe(false);
+    const consentBase = {
+      id: familyId,
+      guardianUserId: guardianId,
+      studentUserId: studentId,
+      policyVersion: "PRIVACY_POLICY_2026_V1",
+      grantedAt: "2026-09-01T00:00:00.000Z",
+      revokedAt: null,
+    };
+    expect(StudentConsentSchema.safeParse({
+      ...consentBase,
+      policyUrl: null,
+      policyDocumentSha256: null,
+    }).success).toBe(true);
+    expect(StudentConsentSchema.safeParse({
+      ...consentBase,
+      policyUrl: "https://policy.example.test/privacy/2026-v1",
+      policyDocumentSha256: null,
     }).success).toBe(false);
   });
 

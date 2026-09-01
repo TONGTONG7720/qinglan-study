@@ -37,6 +37,7 @@ for variable_name in \
   ALLOWED_ORIGINS SESSION_COOKIE_NAME REQUEST_BODY_LIMIT_BYTES CSRF_PROTECTION_ENABLED \
   VITE_ENABLE_DEMO_COURSE_CATALOG VITE_QA_DEMO_BUILD VITE_RELEASE_SCOPE \
   MODEL_PROVIDER OBJECT_STORAGE_PROVIDER EMAIL_PROVIDER \
+  PRIVACY_POLICY_VERSION PRIVACY_POLICY_URL PRIVACY_POLICY_DOCUMENT_SHA256 \
   EXPECTED_MIGRATION_NAME \
   POSTGRES_DB BACKUP_SHARED_GID \
   POSTGRES_ADMIN_USER POSTGRES_MIGRATOR_USER POSTGRES_APP_USER POSTGRES_BACKUP_USER \
@@ -115,6 +116,23 @@ if [ "$OBJECT_STORAGE_PROVIDER" != "disabled" ]; then
 fi
 if [ "$EMAIL_PROVIDER" != "disabled" ]; then
   echo "EMAIL_PROVIDER must remain disabled until a production adapter is implemented" >&2
+  exit 78
+fi
+case "$PRIVACY_POLICY_VERSION" in
+  *replace*|*example*|*fictional*|*test-only*|'')
+    echo "PRIVACY_POLICY_VERSION must identify the reviewed published policy" >&2
+    exit 78
+    ;;
+esac
+if ! printf '%s' "$PRIVACY_POLICY_URL" | grep -Eq '^https://[^/?#[:space:]]+/.+'; then
+  echo "PRIVACY_POLICY_URL must be a public HTTPS document URL" >&2
+  exit 78
+fi
+case "$PRIVACY_POLICY_URL" in
+  *\?*|*\#*) echo "PRIVACY_POLICY_URL must not contain query or fragment data" >&2; exit 78 ;;
+esac
+if ! printf '%s' "$PRIVACY_POLICY_DOCUMENT_SHA256" | grep -Eq '^[a-f0-9]{64}$'; then
+  echo "PRIVACY_POLICY_DOCUMENT_SHA256 must be a lowercase SHA-256" >&2
   exit 78
 fi
 

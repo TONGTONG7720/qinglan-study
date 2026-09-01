@@ -1,5 +1,4 @@
 import { createHash } from "node:crypto";
-import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { isAbsolute, relative, resolve } from "node:path";
 
@@ -15,17 +14,24 @@ import pg from "pg";
 import { z } from "zod";
 
 const requiredAuthorization = "ONBOARD_REAL_FAMILY_AND_ALIGN_CONFIRMED_TEXTBOOKS";
+const argumentsList = process.argv.slice(2);
+if (argumentsList.includes("--help")) {
+  process.stdout.write(JSON.stringify({
+    usage: "family:onboard-real [--validate-only] <absolute-git-external-json>",
+    schemaVersion: 2,
+    target: "PRODUCTION_HTTPS_ONLY",
+    policyEvidence: ["public-https-url", "git-external-exact-bytes", "sha256", "guardian-accepted-at"],
+    credentialsSource: "process-environment-only",
+    outputContainsPersonalData: false,
+  }));
+  process.exit(0);
+}
 if (process.env.REAL_FAMILY_ONBOARDING_AUTHORIZATION !== requiredAuthorization) {
   throw new Error(`Set REAL_FAMILY_ONBOARDING_AUTHORIZATION=${requiredAuthorization}`);
 }
 
 const repositoryRoot = resolve(import.meta.dirname, "../../..");
-const environmentPath = resolve(repositoryRoot, ".env");
-if (process.env.NODE_ENV !== "production" && existsSync(environmentPath)) {
-  process.loadEnvFile(environmentPath);
-}
 
-const argumentsList = process.argv.slice(2);
 const validateOnly = argumentsList.includes("--validate-only");
 const inputArguments = argumentsList.filter((argument) => argument !== "--validate-only");
 if (inputArguments.length !== 1 || !isAbsolute(inputArguments[0])) {
@@ -60,11 +66,27 @@ const StudentInputSchema = z.object({
   dailyMinutes: z.number().int().min(10).max(180),
   schoolName: z.string().trim().min(1).max(120).optional(),
   cohortYear: z.number().int().min(2020).max(2100).optional(),
-  consentPolicyVersion: z.string().trim().min(1).max(40),
   textbooks: z.array(TextbookBindingSchema).min(5).max(7),
 }).strict();
+const PrivacyPolicyInputSchema = z.object({
+  version: z.string().trim().min(1).max(40),
+  publicUrl: z.url().refine((value) => new URL(value).protocol === "https:", "publicUrl must use HTTPS"),
+  documentPath: z.string().min(1),
+  documentSha256: z.string().regex(/^[a-f0-9]{64}$/u),
+}).strict();
 const OnboardingInputSchema = z.object({
-  schemaVersion: z.literal(1),
+  schemaVersion: z.literal(2),
+  targetEnvironment: z.object({
+    kind: z.literal("PRODUCTION"),
+    name: z.string().regex(/^[a-z][a-z0-9-]{2,39}$/u),
+    apiBaseUrl: z.url().refine((value) => new URL(value).protocol === "https:", "apiBaseUrl must use HTTPS"),
+    databaseName: z.string().regex(/^[a-z][a-z0-9_]{2,62}$/u),
+  }).strict(),
+  privacyPolicy: PrivacyPolicyInputSchema,
+  guardianPolicyAcceptance: z.object({
+    acceptedAt: z.iso.datetime(),
+    confirmation: z.literal("GUARDIAN_ACCEPTED_DISPLAYED_PRIVACY_POLICY"),
+  }).strict(),
   family: z.object({
     name: z.string().trim().min(1).max(80),
     monthlyAiBudgetFen: z.number().int().min(1).max(1_000_000),
@@ -110,34 +132,42 @@ const OnboardingInputSchema = z.object({
 
 const rawInput = JSON.parse(await readFile(inputPath, "utf8"));
 const input = OnboardingInputSchema.parse(rawInput);
+assertProductionRuntimeEnvironment();
+const guardianAcceptedAt = new Date(input.guardianPolicyAcceptance.acceptedAt);
+if (
+  guardianAcceptedAt.getTime() > Date.now()
+  || Date.now() - guardianAcceptedAt.getTime() > 24 * 60 * 60 * 1_000
+) {
+  throw new Error("Guardian policy acceptance must be an actual timestamp from the last 24 hours");
+}
+if (
+  process.env.PRIVACY_POLICY_VERSION !== input.privacyPolicy.version
+  || process.env.PRIVACY_POLICY_URL !== input.privacyPolicy.publicUrl
+  || process.env.PRIVACY_POLICY_DOCUMENT_SHA256 !== input.privacyPolicy.documentSha256
+) {
+  throw new Error("Onboarding policy evidence does not match the configured production policy");
+}
+if (!isAbsolute(input.privacyPolicy.documentPath)) {
+  throw new Error("Privacy policy documentPath must be absolute");
+}
+const policyDocumentPath = resolve(input.privacyPolicy.documentPath);
+if (isWithin(repositoryRoot, policyDocumentPath)) {
+  throw new Error("Accepted privacy policy evidence must remain outside the repository");
+}
+const policyDocument = await readFile(policyDocumentPath);
+if (digestBytes(policyDocument) !== input.privacyPolicy.documentSha256) {
+  throw new Error("Privacy policy document SHA-256 does not match onboarding input");
+}
 const databaseUrl = requiredEnvironment("DATABASE_URL");
 const baseUrl = new URL(requiredEnvironment("REAL_FAMILY_API_BASE_URL"));
-if (
-  baseUrl.protocol !== "https:"
-  && !(baseUrl.protocol === "http:" && new Set(["127.0.0.1", "localhost"]).has(baseUrl.hostname))
-) {
-  throw new Error("REAL_FAMILY_API_BASE_URL must use HTTPS unless it targets loopback");
+if (baseUrl.protocol !== "https:") {
+  throw new Error("REAL_FAMILY_API_BASE_URL must use HTTPS for real-family onboarding");
 }
 const apiBaseUrl = baseUrl.toString().replace(/\/$/u, "");
-const adminCredential = {
-  loginId: requiredEnvironment("REAL_FAMILY_ADMIN_LOGIN_ID"),
-  password: requiredPassword("REAL_FAMILY_ADMIN_PASSWORD"),
-};
-const ownerCredential = {
-  loginId: input.family.owner.loginId,
-  password: requiredPassword(input.family.owner.passwordEnvironmentName),
-};
-const studentCredentials = new Map(input.students.map((student) => [
-  student.reference,
-  { loginId: student.loginId, password: requiredPassword(student.passwordEnvironmentName) },
-]));
-const householdPasswords = [
-  ownerCredential.password,
-  ...[...studentCredentials.values()].map((item) => item.password),
-];
-if (new Set(householdPasswords).size !== householdPasswords.length) {
-  throw new Error("Every household account must use a distinct password");
+if (apiBaseUrl !== new URL(input.targetEnvironment.apiBaseUrl).toString().replace(/\/$/u, "")) {
+  throw new Error("REAL_FAMILY_API_BASE_URL does not match the declared production target");
 }
+await assertTargetDatabase(databaseUrl, input.targetEnvironment.databaseName);
 
 const targets = await loadAndValidateTargets(databaseUrl, input.students);
 if (validateOnly) {
@@ -147,10 +177,36 @@ if (validateOnly) {
     families: 1,
     students: input.students.length,
     textbookContexts: targets.reduce((count, student) => count + student.textbooks.length, 0),
+    targetEnvironmentVerified: true,
+    privacyPolicyDocumentVerified: true,
     credentialsIncluded: false,
     personalDataIncluded: false,
   }));
 } else {
+  const expectedAcceptance = `ACCEPTED:${input.privacyPolicy.version}:${input.privacyPolicy.documentSha256}`;
+  if (requiredEnvironment("REAL_FAMILY_GUARDIAN_POLICY_ACCEPTANCE") !== expectedAcceptance) {
+    throw new Error("Guardian privacy policy acceptance attestation does not match the displayed document");
+  }
+  await verifyPublishedPolicy(input.privacyPolicy.publicUrl, input.privacyPolicy.documentSha256);
+  const adminCredential = {
+    loginId: requiredEnvironment("REAL_FAMILY_ADMIN_LOGIN_ID"),
+    password: requiredPassword("REAL_FAMILY_ADMIN_PASSWORD"),
+  };
+  const ownerCredential = {
+    loginId: input.family.owner.loginId,
+    password: requiredPassword(input.family.owner.passwordEnvironmentName),
+  };
+  const studentCredentials = new Map(input.students.map((student) => [
+    student.reference,
+    { loginId: student.loginId, password: requiredPassword(student.passwordEnvironmentName) },
+  ]));
+  const householdPasswords = [
+    ownerCredential.password,
+    ...[...studentCredentials.values()].map((item) => item.password),
+  ];
+  if (new Set(householdPasswords).size !== householdPasswords.length) {
+    throw new Error("Every household account must use a distinct password");
+  }
   const sessions = [];
   try {
     const adminSession = await authenticatedSession(adminCredential, "administrator");
@@ -159,6 +215,12 @@ if (validateOnly) {
       schemaVersion: input.schemaVersion,
       familyName: input.family.name,
       ownerLoginId: input.family.owner.loginId,
+      privacyPolicy: {
+        version: input.privacyPolicy.version,
+        publicUrl: input.privacyPolicy.publicUrl,
+        documentSha256: input.privacyPolicy.documentSha256,
+      },
+      guardianAcceptedAt: input.guardianPolicyAcceptance.acceptedAt,
       students: input.students.map((student) => ({
         reference: student.reference,
         loginId: student.loginId,
@@ -229,7 +291,9 @@ if (validateOnly) {
         session: ownerSession,
         path: `/v1/families/${redeemed.familyId}/students/${createdStudent.userId}/consents`,
         body: {
-          policyVersion: student.consentPolicyVersion,
+          policyVersion: input.privacyPolicy.version,
+          policyUrl: input.privacyPolicy.publicUrl,
+          policyDocumentSha256: input.privacyPolicy.documentSha256,
           confirmation: "GRANT_STUDENT_CONSENT",
         },
         idempotencyKey: idempotencyKey("real-student-consent", studentKey),
@@ -237,6 +301,9 @@ if (validateOnly) {
         label: `grant student consent ${String(studentIndex + 1)}`,
       });
       if (consent.revokedAt !== null) throw new Error("Granted student consent unexpectedly returned revoked");
+      if (new Date(consent.grantedAt).getTime() < guardianAcceptedAt.getTime()) {
+        throw new Error("Consent was recorded before the guardian policy acceptance timestamp");
+      }
 
       const target = targets.find((candidate) => candidate.reference === student.reference);
       if (target === undefined) throw new Error("Validated student target disappeared");
@@ -289,13 +356,16 @@ if (validateOnly) {
       redeemed.userId,
       completedStudents,
       input.family.monthlyAiBudgetFen,
+      input.privacyPolicy,
     );
     process.stdout.write(JSON.stringify({
       onboarded: true,
       scope: "REAL_FAMILY",
-      familyId: redeemed.familyId,
-      ownerUserId: redeemed.userId,
-      students: completedStudents,
+      targetEnvironment: input.targetEnvironment.name,
+      students: completedStudents.map((student) => ({
+        grade: student.grade,
+        subjectCount: student.subjects.length,
+      })),
       verification,
       credentialsIncluded: false,
       personalDataIncluded: false,
@@ -342,7 +412,61 @@ async function loadAndValidateTargets(connectionString, students) {
   }
 }
 
-async function verifyDatabase(connectionString, familyId, ownerUserId, students, monthlyAiBudgetFen) {
+async function assertTargetDatabase(connectionString, expectedDatabaseName) {
+  const client = new pg.Client({ connectionString });
+  await client.connect();
+  try {
+    const database = await client.query("SELECT current_database() AS name");
+    if (database.rows[0]?.name !== expectedDatabaseName) {
+      throw new Error("DATABASE_URL does not point to the declared production database");
+    }
+    const migration = await client.query(
+      `SELECT "migration_name", "finished_at", "rolled_back_at"
+       FROM "_prisma_migrations"
+       ORDER BY "started_at" DESC
+       LIMIT 1`,
+    );
+    const expectedMigrationName = requiredEnvironment("EXPECTED_MIGRATION_NAME");
+    if (
+      migration.rowCount !== 1
+      || migration.rows[0].migration_name !== expectedMigrationName
+      || migration.rows[0].finished_at === null
+      || migration.rows[0].rolled_back_at !== null
+    ) {
+      throw new Error("Production database migration state does not match EXPECTED_MIGRATION_NAME");
+    }
+  } finally {
+    await client.end();
+  }
+}
+
+async function verifyPublishedPolicy(publicUrl, expectedSha256) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => { controller.abort(); }, 15_000);
+  try {
+    const response = await fetch(publicUrl, { redirect: "error", signal: controller.signal });
+    if (!response.ok) throw new Error(`Published privacy policy returned HTTP ${String(response.status)}`);
+    const contentLength = Number(response.headers.get("content-length") ?? "0");
+    if (Number.isFinite(contentLength) && contentLength > 2_000_000) {
+      throw new Error("Published privacy policy exceeds the 2 MB acceptance limit");
+    }
+    const bytes = Buffer.from(await response.arrayBuffer());
+    if (bytes.length === 0 || bytes.length > 2_000_000 || digestBytes(bytes) !== expectedSha256) {
+      throw new Error("Published privacy policy bytes do not match the accepted SHA-256");
+    }
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function verifyDatabase(
+  connectionString,
+  familyId,
+  ownerUserId,
+  students,
+  monthlyAiBudgetFen,
+  privacyPolicy,
+) {
   const client = new pg.Client({ connectionString });
   await client.connect();
   try {
@@ -366,8 +490,15 @@ async function verifyDatabase(connectionString, familyId, ownerUserId, students,
     );
     const consents = await client.query(
       `SELECT count(*)::int AS "count" FROM "Consent"
-       WHERE "guardianUserId" = $1 AND "studentUserId" = ANY($2::uuid[]) AND "revokedAt" IS NULL`,
-      [ownerUserId, studentIds],
+       WHERE "guardianUserId" = $1 AND "studentUserId" = ANY($2::uuid[]) AND "revokedAt" IS NULL
+         AND "policyVersion" = $3 AND "policyUrl" = $4 AND "policyDocumentSha256" = $5`,
+      [
+        ownerUserId,
+        studentIds,
+        privacyPolicy.version,
+        privacyPolicy.publicUrl,
+        privacyPolicy.documentSha256,
+      ],
     );
     const contexts = await client.query(
       `SELECT count(*)::int AS "count" FROM "StudentTextbookContext" context
@@ -398,6 +529,7 @@ async function verifyDatabase(connectionString, familyId, ownerUserId, students,
       activeStudents: students.length,
       activeOwnerStudentRelations: students.length,
       activeStudentConsents: students.length,
+      consentPolicyEvidenceVerified: true,
       confirmedTextbookContexts: expectedContexts,
       familyAiBudgetConfigured: true,
     };
@@ -522,6 +654,10 @@ function digest(value) {
   return createHash("sha256").update(JSON.stringify(value), "utf8").digest("hex");
 }
 
+function digestBytes(value) {
+  return createHash("sha256").update(value).digest("hex");
+}
+
 function idempotencyKey(prefix, material) {
   return `${prefix}:${digest(material).slice(0, 40)}`;
 }
@@ -530,6 +666,24 @@ function requiredEnvironment(name) {
   const value = process.env[name]?.trim();
   if (value === undefined || value.length === 0) throw new Error(`${name} is required`);
   return value;
+}
+
+function assertProductionRuntimeEnvironment() {
+  const requiredValues = {
+    NODE_ENV: "production",
+    SESSION_COOKIE_SECURE: "true",
+    VITE_RELEASE_SCOPE: "READ_ONLY_BETA",
+    VITE_ENABLE_DEMO_COURSE_CATALOG: "false",
+    VITE_QA_DEMO_BUILD: "false",
+    MODEL_PROVIDER: "disabled",
+    OBJECT_STORAGE_PROVIDER: "disabled",
+    EMAIL_PROVIDER: "disabled",
+  };
+  for (const [name, expected] of Object.entries(requiredValues)) {
+    if (process.env[name]?.trim() !== expected) {
+      throw new Error(`${name} must equal the reviewed real-family production value`);
+    }
+  }
 }
 
 function requiredPassword(name) {
