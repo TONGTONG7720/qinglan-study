@@ -5,7 +5,12 @@ import {
 import type { StudentTextbookContextResponse } from "@study/contracts";
 import { loadStudentHomeDemo } from "#student-home-demo-provider";
 
-import { HttpError, requestJson } from "../../api/http-client";
+import {
+  HttpError,
+  isAbortError,
+  isRecoverableReadError,
+  requestJson,
+} from "../../api/http-client";
 import type { HomeCourseSnapshot, StudentHomeResult } from "./types";
 
 export interface StudentHomeRepository {
@@ -87,9 +92,7 @@ export function createStudentHomeRepository(options: StudentHomeRepositoryOption
           },
         };
       } catch (error: unknown) {
-        if (error instanceof DOMException && error.name === "AbortError") {
-          throw error;
-        }
+        if (isAbortError(error) || isRecoverableReadError(error)) throw error;
         return fixtureOr(
           error instanceof HttpError && error.status === 404 ? "NO_DAILY_PLAN" : "DAILY_PLAN_SERVICE_UNAVAILABLE",
           signal,

@@ -6,6 +6,8 @@ import type { ReleaseScope } from "./config/release-scope-policy";
 import { LoginPage } from "./features/auth/LoginPage";
 import { CanonicalStudentPage, type CanonicalStudentPageProps } from "./features/routes/CanonicalStudentPage";
 import { PlannedSurfacePage, type PlannedRole } from "./features/routes/PlannedSurfacePage";
+import { RequestRecoveryCoordinator } from "./features/system/RequestRecoveryCoordinator";
+import { RequestRecoveryPage } from "./features/system/RequestRecoveryPage";
 import { GlobalErrorBoundary, SystemStatePage } from "./features/system/SystemStatePage";
 
 const StudentHomePage = lazy(async () => ({ default: (await import("./features/student-home/StudentHomePage")).StudentHomePage }));
@@ -129,9 +131,9 @@ function ApplicationRoutes({ releaseScope }: { readonly releaseScope: ReleaseSco
   return <Routes>
     <Route element={<Navigate replace to={releaseScope === "READ_ONLY_BETA" ? "/login" : "/student/today"} />} path="/" />
     <Route element={<LoginPage />} path="/login" />
-    <Route element={<SystemStatePage kind="session-expired" />} path="/session-expired" />
-    <Route element={<SystemStatePage kind="offline" />} path="/offline" />
-    <Route element={<SystemStatePage kind="error" />} path="/error-recovery" />
+    <Route element={<RequestRecoveryPage kind="session-expired" />} path="/session-expired" />
+    <Route element={<RequestRecoveryPage kind="offline" />} path="/offline" />
+    <Route element={<RequestRecoveryPage kind="error" />} path="/error-recovery" />
     <Route element={<SystemStatePage kind="limited-release" />} path="/limited-release" />
     <Route element={<StudentSurface releaseScope={releaseScope} surface="today" />} path="/student/today" />
     <Route element={<StudentSurface releaseScope={releaseScope} surface="learn" />} path="/student/learn" />
@@ -153,6 +155,7 @@ export function App({ releaseScope = runtimeReleaseScope }: AppProps = {}) {
   return (
     <ReleaseScopeProvider scope={releaseScope}>
       <GlobalErrorBoundary>
+        <RequestRecoveryCoordinator />
         <Suspense fallback={<RouteLoading />}>
           <ApplicationRoutes releaseScope={releaseScope} />
         </Suspense>

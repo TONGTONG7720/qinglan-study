@@ -5,6 +5,17 @@ import { Icon } from "../../components/Icon";
 
 export type SystemStateKind = "not-found" | "session-expired" | "offline" | "error" | "limited-release";
 
+export interface SystemStatePageProps {
+  readonly kind: SystemStateKind;
+  readonly code?: string;
+  readonly description?: string;
+  readonly primaryLabel?: string;
+  readonly primaryTarget?: string;
+  readonly primaryState?: unknown;
+  readonly onPrimaryAction?: () => void;
+  readonly statusMessage?: string | null;
+}
+
 const stateCopy: Readonly<Record<SystemStateKind, {
   readonly eyebrow: string;
   readonly title: string;
@@ -55,7 +66,16 @@ const stateCopy: Readonly<Record<SystemStateKind, {
   },
 };
 
-export function SystemStatePage({ kind }: { readonly kind: SystemStateKind }) {
+export function SystemStatePage({
+  kind,
+  code,
+  description,
+  primaryLabel,
+  primaryTarget,
+  primaryState,
+  onPrimaryAction,
+  statusMessage,
+}: SystemStatePageProps) {
   const copy = stateCopy[kind];
   return (
     <main className="system-page">
@@ -73,7 +93,7 @@ export function SystemStatePage({ kind }: { readonly kind: SystemStateKind }) {
       <section className="system-content" aria-labelledby="system-state-title">
         <header>
           <span>{copy.eyebrow}</span>
-          <code>{copy.code}</code>
+          <code>{code ?? copy.code}</code>
         </header>
         <div className="system-status-strip">
           <span>{kind === "limited-release" ? "首发范围　邀请制只读" : "敏感详情　未展示"}</span>
@@ -83,7 +103,7 @@ export function SystemStatePage({ kind }: { readonly kind: SystemStateKind }) {
         <div className="system-message">
           <Icon name={kind === "offline" ? "monitor" : kind === "error" ? "circleAlert" : "shieldCheck"} size={36} />
           <h1 id="system-state-title">{copy.title}</h1>
-          <p>{copy.description}</p>
+          <p>{description ?? copy.description}</p>
         </div>
         <ol className="system-path">
           <li>停止不确定的写操作</li>
@@ -92,11 +112,14 @@ export function SystemStatePage({ kind }: { readonly kind: SystemStateKind }) {
           <li>由用户明确决定下一步</li>
         </ol>
         <div className="system-actions">
-          <Link className="system-primary" to={copy.primaryTarget}>{copy.primaryLabel}<Icon name="arrowRight" size={18} /></Link>
+          {onPrimaryAction === undefined
+            ? <Link className="system-primary" state={primaryState} to={primaryTarget ?? copy.primaryTarget}>{primaryLabel ?? copy.primaryLabel}<Icon name="arrowRight" size={18} /></Link>
+            : <button className="system-primary" onClick={onPrimaryAction} type="button">{primaryLabel ?? copy.primaryLabel}<Icon name="arrowRight" size={18} /></button>}
           <button onClick={() => {
             window.history.back();
           }} type="button">返回上一安全页面</button>
         </div>
+        {statusMessage === null || statusMessage === undefined ? null : <p className="system-action-status" role="status">{statusMessage}</p>}
       </section>
     </main>
   );

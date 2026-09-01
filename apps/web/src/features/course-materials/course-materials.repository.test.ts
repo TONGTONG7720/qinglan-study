@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import { HttpError, RequestTimeoutError } from "../../api/http-client";
 import { createCourseMaterialsRepository } from "./course-materials.repository";
 
 describe("course materials repository", () => {
@@ -49,5 +50,19 @@ describe("course materials repository", () => {
       expect(result.catalog.courses).toHaveLength(5);
       expect(result.catalog.recentMaterials).toHaveLength(0);
     }
+  });
+
+  it("preserves recoverable request failures for the page coordinator", async () => {
+    const expired = createCourseMaterialsRepository({
+      demoEnabled: false,
+      request: () => Promise.reject(new HttpError(401, "expired")),
+    });
+    await expect(expired.loadCatalog("a0000000-0000-4000-8000-000000000002")).rejects.toMatchObject({ status: 401 });
+
+    const timedOut = createCourseMaterialsRepository({
+      demoEnabled: false,
+      request: () => Promise.reject(new RequestTimeoutError(10_000)),
+    });
+    await expect(timedOut.loadCatalog("a0000000-0000-4000-8000-000000000002")).rejects.toBeInstanceOf(RequestTimeoutError);
   });
 });
