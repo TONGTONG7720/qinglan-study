@@ -38,6 +38,12 @@ vendor/
 *.md
 !README.md
 
+# Real AI evaluation cases, provider outputs, and human reviews must remain Git-external.
+*.ai-eval-cases.jsonl
+*.ai-eval-model-runs.jsonl
+*.ai-eval-reviewed-outcomes.jsonl
+ai-eval-private/
+
 # Browser automation profiles can contain cookies, sessions, history, and local storage.
 **/chrome-profile*/
 **/edge-*-profile/

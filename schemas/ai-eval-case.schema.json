@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://qinglang.local/schemas/ai-eval-case.schema.json",
+  "title": "Git-external human-curated AI evaluation case",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "id",
+    "subjectCode",
+    "questionType",
+    "developerInstruction",
+    "prompt",
+    "rubric",
+    "sourceKind",
+    "sourceReference",
+    "caseAuthorReference",
+    "curatedAt",
+    "caseAttestation",
+    "privacyAttestation",
+    "promptVersion"
+  ],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9._-]{7,119}$" },
+    "subjectCode": {
+      "enum": ["CHINESE", "MATH", "ENGLISH", "MORALITY", "HISTORY", "PHYSICS", "CHEMISTRY"]
+    },
+    "questionType": {
+      "enum": [
+        "SINGLE_CHOICE",
+        "MULTIPLE_CHOICE",
+        "TRUE_FALSE",
+        "FILL_BLANK",
+        "SHORT_ANSWER",
+        "CALCULATION",
+        "EXPERIMENT_DESIGN",
+        "ERROR_DIAGNOSIS",
+        "GRAPHING"
+      ]
+    },
+    "developerInstruction": { "type": "string", "minLength": 8, "maxLength": 4000 },
+    "prompt": { "type": "string", "minLength": 8, "maxLength": 20000 },
+    "rubric": { "type": "string", "minLength": 8, "maxLength": 10000 },
+    "sourceKind": {
+      "enum": ["AUTHORIZED_PRIVATE", "PUBLIC_DOMAIN", "OPEN_LICENSE", "ORIGINAL_HUMAN"]
+    },
+    "sourceReference": { "type": "string", "minLength": 8, "maxLength": 500 },
+    "caseAuthorReference": { "type": "string", "minLength": 3, "maxLength": 120 },
+    "curatedAt": { "type": "string", "format": "date-time", "pattern": "Z$" },
+    "caseAttestation": { "const": "HUMAN_CURATED_AUTHORIZED_EVALUATION_CASE" },
+    "privacyAttestation": { "const": "NO_REAL_STUDENT_IDENTITY_OR_CREDENTIALS" },
+    "promptVersion": { "type": "string", "pattern": "^[a-z0-9][a-z0-9._-]{7,119}$" }
+  }
+}
