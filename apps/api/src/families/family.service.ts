@@ -36,6 +36,17 @@ function resourceNotFound(): never {
   throw new NotFoundException();
 }
 
+function requireConfiguredConsentPolicy(input: GrantStudentConsentInput): void {
+  if (process.env.NODE_ENV !== "production") return;
+  if (
+    input.policyVersion !== process.env.PRIVACY_POLICY_VERSION
+    || input.policyUrl !== process.env.PRIVACY_POLICY_URL
+    || input.policyDocumentSha256 !== process.env.PRIVACY_POLICY_DOCUMENT_SHA256
+  ) {
+    throw new ConflictException();
+  }
+}
+
 @Injectable()
 export class FamilyService {
   constructor(
@@ -250,6 +261,7 @@ export class FamilyService {
     input: GrantStudentConsentInput,
     idempotencyKey: string,
   ): Promise<StudentConsent> {
+    requireConfiguredConsentPolicy(input);
     return this.idempotency.run({
       kind: "GRANT_STUDENT_CONSENT",
       key: idempotencyKey,
@@ -260,6 +272,26 @@ export class FamilyService {
       resultSchema: StudentConsentSchema,
       execute: async (transaction) => {
         await this.requireGuardianStudentRelation(transaction, actor, familyId, studentUserId);
+        const existing = await transaction.consent.findUnique({
+          where: {
+            guardianUserId_studentUserId_policyVersion: {
+              guardianUserId: actor.id,
+              studentUserId,
+              policyVersion: input.policyVersion,
+            },
+          },
+          select: { policyUrl: true, policyDocumentSha256: true },
+        });
+        if (
+          existing !== null
+          && existing.policyUrl !== null
+          && (
+            existing.policyUrl !== input.policyUrl
+            || existing.policyDocumentSha256 !== input.policyDocumentSha256
+          )
+        ) {
+          throw new ConflictException();
+        }
         const now = new Date();
         const consent = await transaction.consent.upsert({
           where: {
@@ -273,9 +305,16 @@ export class FamilyService {
             guardianUserId: actor.id,
             studentUserId,
             policyVersion: input.policyVersion,
+            policyUrl: input.policyUrl,
+            policyDocumentSha256: input.policyDocumentSha256,
             grantedAt: now,
           },
-          update: { grantedAt: now, revokedAt: null },
+          update: {
+            policyUrl: input.policyUrl,
+            policyDocumentSha256: input.policyDocumentSha256,
+            grantedAt: now,
+            revokedAt: null,
+          },
         });
         await transaction.auditEvent.create({
           data: {
@@ -284,7 +323,12 @@ export class FamilyService {
             action: "STUDENT_CONSENT_GRANTED",
             resourceType: "Consent",
             resourceId: consent.id,
-            metadata: { policyVersion: input.policyVersion, studentUserId },
+            metadata: {
+              policyVersion: input.policyVersion,
+              policyUrl: input.policyUrl,
+              policyDocumentSha256: input.policyDocumentSha256,
+              studentUserId,
+            },
           },
         });
         return this.studentConsentResult(consent);
@@ -821,6 +865,8 @@ export class FamilyService {
     guardianUserId: string;
     studentUserId: string;
     policyVersion: string;
+    policyUrl: string | null;
+    policyDocumentSha256: string | null;
     grantedAt: Date;
     revokedAt: Date | null;
   }): StudentConsent {
@@ -829,6 +875,8 @@ export class FamilyService {
       guardianUserId: consent.guardianUserId,
       studentUserId: consent.studentUserId,
       policyVersion: consent.policyVersion,
+      policyUrl: consent.policyUrl,
+      policyDocumentSha256: consent.policyDocumentSha256,
       grantedAt: consent.grantedAt.toISOString(),
       revokedAt: consent.revokedAt?.toISOString() ?? null,
     });

@@ -20,7 +20,10 @@ function productionEnvironment(): NodeJS.ProcessEnv {
     SESSION_COOKIE_SECURE: "true",
     REAUTH_PROOF_SECRET: reauthenticationSecret,
     INVITATION_TOKEN_SECRET: invitationSecret,
-    EXPECTED_MIGRATION_NAME: "20260901090000_question_bank_release_gates",
+    EXPECTED_MIGRATION_NAME: "20260901140000_consent_policy_evidence",
+    PRIVACY_POLICY_VERSION: "2026-09-v1",
+    PRIVACY_POLICY_URL: "https://policy.qinglang.cn/privacy/2026-09-v1",
+    PRIVACY_POLICY_DOCUMENT_SHA256: "a".repeat(64),
     VITE_ENABLE_DEMO_COURSE_CATALOG: "false",
     VITE_QA_DEMO_BUILD: "false",
     VITE_RELEASE_SCOPE: "READ_ONLY_BETA",
@@ -77,6 +80,9 @@ describe("readAppConfig", () => {
     "REAUTH_PROOF_SECRET",
     "INVITATION_TOKEN_SECRET",
     "EXPECTED_MIGRATION_NAME",
+    "PRIVACY_POLICY_VERSION",
+    "PRIVACY_POLICY_URL",
+    "PRIVACY_POLICY_DOCUMENT_SHA256",
     "REQUEST_BODY_LIMIT_BYTES",
     "CSRF_PROTECTION_ENABLED",
     "VITE_ENABLE_DEMO_COURSE_CATALOG",
@@ -115,6 +121,14 @@ describe("readAppConfig", () => {
     expect(() => readAppConfig({
       ...productionEnvironment(),
       INVITATION_TOKEN_SECRET: "i".repeat(64),
+    })).toThrow();
+    expect(() => readAppConfig({
+      ...productionEnvironment(),
+      PRIVACY_POLICY_URL: "http://policy.qinglang.cn/privacy/2026-09-v1",
+    })).toThrow();
+    expect(() => readAppConfig({
+      ...productionEnvironment(),
+      PRIVACY_POLICY_VERSION: "replace-with-policy-version",
     })).toThrow();
   });
 

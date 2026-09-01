@@ -162,6 +162,9 @@ function validateProductionEnvironment(
       REAUTH_PROOF_SECRET: z.string(),
       INVITATION_TOKEN_SECRET: z.string(),
       EXPECTED_MIGRATION_NAME: z.string().regex(/^\d{14}_[a-z0-9_]+$/u),
+      PRIVACY_POLICY_VERSION: z.string().trim().min(1).max(40),
+      PRIVACY_POLICY_URL: z.url(),
+      PRIVACY_POLICY_DOCUMENT_SHA256: z.string().regex(/^[a-f0-9]{64}$/u),
       REQUEST_BODY_LIMIT_BYTES: z.coerce.number().int().min(16_384).max(2_000_000),
       CSRF_PROTECTION_ENABLED: z.literal("true"),
       VITE_ENABLE_DEMO_COURSE_CATALOG: z.literal("false"),
@@ -202,6 +205,28 @@ function validateProductionEnvironment(
       }
       if (value.REAUTH_PROOF_SECRET === value.INVITATION_TOKEN_SECRET) {
         addProductionIssue(context, "INVITATION_TOKEN_SECRET", "production secrets must be distinct");
+      }
+      const policyUrl = new URL(value.PRIVACY_POLICY_URL);
+      if (
+        policyUrl.protocol !== "https:"
+        || policyUrl.username.length > 0
+        || policyUrl.password.length > 0
+        || policyUrl.search.length > 0
+        || policyUrl.hash.length > 0
+        || isPrivateProviderHost(policyUrl.hostname)
+      ) {
+        addProductionIssue(
+          context,
+          "PRIVACY_POLICY_URL",
+          "PRIVACY_POLICY_URL must be an exact public HTTPS document URL",
+        );
+      }
+      if (placeholderPattern.test(value.PRIVACY_POLICY_VERSION)) {
+        addProductionIssue(
+          context,
+          "PRIVACY_POLICY_VERSION",
+          "PRIVACY_POLICY_VERSION must identify the reviewed published document",
+        );
       }
 
       const smokeTest = value.PRODUCTION_SMOKE_TEST === "true";

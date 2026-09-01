@@ -368,14 +368,16 @@ model OwnershipTransfer {
 }
 
 model Consent {
-  id             String    @id @default(uuid()) @db.Uuid
-  guardianUserId String    @db.Uuid
-  studentUserId  String    @db.Uuid
-  policyVersion  String    @db.VarChar(40)
-  grantedAt      DateTime  @default(now()) @db.Timestamptz(6)
-  revokedAt      DateTime? @db.Timestamptz(6)
-  guardian       User      @relation("ConsentGuardian", fields: [guardianUserId], references: [id], onDelete: Cascade)
-  student        User      @relation("ConsentStudent", fields: [studentUserId], references: [id], onDelete: Cascade)
+  id                   String    @id @default(uuid()) @db.Uuid
+  guardianUserId       String    @db.Uuid
+  studentUserId        String    @db.Uuid
+  policyVersion        String    @db.VarChar(40)
+  policyUrl            String?   @db.VarChar(2048)
+  policyDocumentSha256 String?   @db.Char(64)
+  grantedAt            DateTime  @default(now()) @db.Timestamptz(6)
+  revokedAt            DateTime? @db.Timestamptz(6)
+  guardian             User      @relation("ConsentGuardian", fields: [guardianUserId], references: [id], onDelete: Cascade)
+  student              User      @relation("ConsentStudent", fields: [studentUserId], references: [id], onDelete: Cascade)
 
   @@unique([guardianUserId, studentUserId, policyVersion])
 }

@@ -9,6 +9,7 @@ const requiredFiles = [
   ".env.example",
   "compose.yaml",
   "apps/api/package.json",
+  "apps/api/scripts/accept-real-family-production.mjs",
   "apps/web/package.json",
   "packages/contracts/package.json",
   "packages/test-fixtures/package.json",
@@ -29,5 +30,12 @@ test("root package exposes the verification contract", () => {
 
   for (const script of ["lint", "typecheck", "test", "test:e2e", "build"]) {
     assert.equal(typeof packageJson.scripts?.[script], "string", `missing root script: ${script}`);
+  }
+});
+
+test("API package exposes fail-closed real-family onboarding and production acceptance", () => {
+  const packageJson = JSON.parse(readFileSync("apps/api/package.json", "utf8"));
+  for (const script of ["family:onboard-real", "family:accept-production"]) {
+    assert.equal(typeof packageJson.scripts?.[script], "string", `missing API script: ${script}`);
   }
 });
