@@ -13,5 +13,6 @@ networkConcurrency: 8
 allowBuilds:
   "@prisma/engines": true
   "argon2": true
+  "sharp": true
   "prisma": true
   "@prisma/client": true

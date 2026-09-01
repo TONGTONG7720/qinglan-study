@@ -1,6 +1,7 @@
 import { Module } from "@nestjs/common";
 import { AuthModule } from "../auth/auth.module.js";
 import { PrismaModule } from "../common/prisma/prisma.module.js";
+import { ObjectStorageModule } from "../common/storage/object-storage.module.js";
 import { AiController } from "./ai.controller.js";
 import { BudgetService } from "./budget.service.js";
 import {
@@ -42,7 +43,7 @@ export function selectModelProvider(
 }
 
 @Module({
-  imports: [PrismaModule, AuthModule],
+  imports: [PrismaModule, AuthModule, ObjectStorageModule],
   controllers: [AiController],
   providers: [
     BudgetService,

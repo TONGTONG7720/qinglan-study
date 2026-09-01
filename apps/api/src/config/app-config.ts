@@ -17,7 +17,8 @@ const AppConfigSchema = z.object({
   REQUEST_BODY_LIMIT_BYTES: z.coerce.number().int().min(16_384).max(2_000_000).default(256_000),
   CSRF_PROTECTION_ENABLED: BooleanEnvironmentSchema.default(false),
   MODEL_PROVIDER: z.enum(["disabled", "fake", "openai-compatible"]).default("disabled"),
-  OBJECT_STORAGE_PROVIDER: z.enum(["disabled", "development-fixture"]).default("disabled"),
+  OBJECT_STORAGE_PROVIDER: z.enum(["disabled", "s3"]).default("disabled"),
+  OBJECT_SCAN_PROVIDER: z.enum(["disabled", "clamav"]).default("disabled"),
   EMAIL_PROVIDER: z.literal("disabled").default("disabled"),
   ALLOWED_ORIGINS: z
     .string()
@@ -146,6 +147,32 @@ function validateProviderUrl(
   }
 }
 
+function validateObjectStorageUrl(
+  value: string,
+  smokeTest: boolean,
+  context: z.RefinementCtx,
+): void {
+  let storageUrl: URL;
+  try {
+    storageUrl = new URL(value);
+  } catch {
+    addProductionIssue(context, "OBJECT_STORAGE_ENDPOINT", "OBJECT_STORAGE_ENDPOINT must be a valid URL");
+    return;
+  }
+  const smokeLoopback = smokeTest
+    && storageUrl.protocol === "http:"
+    && loopbackHosts.has(storageUrl.hostname);
+  if (storageUrl.protocol !== "https:" && !smokeLoopback) {
+    addProductionIssue(context, "OBJECT_STORAGE_ENDPOINT", "OBJECT_STORAGE_ENDPOINT must use HTTPS");
+  }
+  if (storageUrl.username.length > 0 || storageUrl.password.length > 0) {
+    addProductionIssue(context, "OBJECT_STORAGE_ENDPOINT", "OBJECT_STORAGE_ENDPOINT must not contain credentials");
+  }
+  if (storageUrl.search.length > 0 || storageUrl.hash.length > 0) {
+    addProductionIssue(context, "OBJECT_STORAGE_ENDPOINT", "OBJECT_STORAGE_ENDPOINT must not contain query or fragment data");
+  }
+}
+
 function validateProductionEnvironment(
   environment: NodeJS.ProcessEnv,
   config: AppConfig,
@@ -168,7 +195,8 @@ function validateProductionEnvironment(
       VITE_QA_DEMO_BUILD: z.literal("false"),
       VITE_RELEASE_SCOPE: z.literal("READ_ONLY_BETA"),
       MODEL_PROVIDER: z.enum(["disabled", "openai-compatible"]),
-      OBJECT_STORAGE_PROVIDER: z.literal("disabled"),
+      OBJECT_STORAGE_PROVIDER: z.enum(["disabled", "s3"]),
+      OBJECT_SCAN_PROVIDER: z.enum(["disabled", "clamav"]),
       EMAIL_PROVIDER: z.literal("disabled"),
       MODEL_BASE_URL: z.string().trim().optional(),
       MODEL_API_KEY: z.string().optional(),
@@ -183,6 +211,35 @@ function validateProductionEnvironment(
       OBJECT_STORAGE_BUCKET: z.string().trim().optional(),
       OBJECT_STORAGE_ACCESS_KEY_ID: z.string().trim().optional(),
       OBJECT_STORAGE_SECRET_ACCESS_KEY: z.string().optional(),
+      OBJECT_STORAGE_FORCE_PATH_STYLE: z.preprocess(
+        (value) => value === "" ? undefined : value,
+        z.enum(["true", "false"]).optional(),
+      ),
+      OBJECT_STORAGE_UPLOAD_TTL_SECONDS: z.preprocess(
+        (value) => value === "" ? undefined : value,
+        z.coerce.number().int().min(60).max(900).optional(),
+      ),
+      OBJECT_STORAGE_READ_TTL_SECONDS: z.preprocess(
+        (value) => value === "" ? undefined : value,
+        z.coerce.number().int().min(30).max(300).optional(),
+      ),
+      OBJECT_STORAGE_RETENTION_DAYS: z.preprocess(
+        (value) => value === "" ? undefined : value,
+        z.coerce.number().int().min(1).max(90).optional(),
+      ),
+      OBJECT_STORAGE_SSE: z.preprocess(
+        (value) => value === "" ? undefined : value,
+        z.enum(["none", "AES256"]).optional(),
+      ),
+      CLAMAV_HOST: z.string().trim().optional(),
+      CLAMAV_PORT: z.preprocess(
+        (value) => value === "" ? undefined : value,
+        z.coerce.number().int().min(1).max(65_535).optional(),
+      ),
+      CLAMAV_TIMEOUT_MS: z.preprocess(
+        (value) => value === "" ? undefined : value,
+        z.coerce.number().int().min(1_000).max(60_000).optional(),
+      ),
       SMTP_HOST: z.string().trim().optional(),
       SMTP_USERNAME: z.string().trim().optional(),
       SMTP_PASSWORD: z.string().optional(),
@@ -234,19 +291,84 @@ function validateProductionEnvironment(
         addProductionIssue(context, "MODEL_PROVIDER", "disabled model configuration must not include provider credentials");
       }
 
-      const disabledStorageValues = [
+      const storageValues = [
         value.OBJECT_STORAGE_ENDPOINT,
         value.OBJECT_STORAGE_REGION,
         value.OBJECT_STORAGE_BUCKET,
         value.OBJECT_STORAGE_ACCESS_KEY_ID,
         value.OBJECT_STORAGE_SECRET_ACCESS_KEY,
+        value.OBJECT_STORAGE_FORCE_PATH_STYLE,
+        value.OBJECT_STORAGE_UPLOAD_TTL_SECONDS,
+        value.OBJECT_STORAGE_READ_TTL_SECONDS,
+        value.OBJECT_STORAGE_RETENTION_DAYS,
+        value.OBJECT_STORAGE_SSE,
       ];
-      if (disabledStorageValues.some((entry) => (entry?.length ?? 0) > 0)) {
-        addProductionIssue(
-          context,
-          "OBJECT_STORAGE_PROVIDER",
-          "object storage is disabled until a production adapter is implemented",
-        );
+      const scannerValues = [value.CLAMAV_HOST, value.CLAMAV_PORT, value.CLAMAV_TIMEOUT_MS];
+      if (value.OBJECT_STORAGE_PROVIDER === "s3") {
+        if (value.OBJECT_STORAGE_ENDPOINT === undefined || value.OBJECT_STORAGE_ENDPOINT.length === 0) {
+          addProductionIssue(context, "OBJECT_STORAGE_ENDPOINT", "OBJECT_STORAGE_ENDPOINT is required");
+        } else {
+          validateObjectStorageUrl(value.OBJECT_STORAGE_ENDPOINT, smokeTest, context);
+        }
+        if (value.OBJECT_STORAGE_REGION === undefined || value.OBJECT_STORAGE_REGION.length === 0) {
+          addProductionIssue(context, "OBJECT_STORAGE_REGION", "OBJECT_STORAGE_REGION is required");
+        }
+        if (
+          value.OBJECT_STORAGE_BUCKET === undefined
+          || !/^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$/u.test(value.OBJECT_STORAGE_BUCKET)
+        ) {
+          addProductionIssue(context, "OBJECT_STORAGE_BUCKET", "OBJECT_STORAGE_BUCKET must be a valid private bucket name");
+        }
+        if (value.OBJECT_STORAGE_ACCESS_KEY_ID === undefined || value.OBJECT_STORAGE_ACCESS_KEY_ID.length < 3) {
+          addProductionIssue(context, "OBJECT_STORAGE_ACCESS_KEY_ID", "OBJECT_STORAGE_ACCESS_KEY_ID is required");
+        }
+        if (
+          value.OBJECT_STORAGE_SECRET_ACCESS_KEY === undefined
+          || !hasStrongSecretShape(value.OBJECT_STORAGE_SECRET_ACCESS_KEY, 20)
+        ) {
+          addProductionIssue(context, "OBJECT_STORAGE_SECRET_ACCESS_KEY", "a strong object storage secret is required");
+        }
+        if (value.OBJECT_STORAGE_FORCE_PATH_STYLE === undefined) {
+          addProductionIssue(context, "OBJECT_STORAGE_FORCE_PATH_STYLE", "OBJECT_STORAGE_FORCE_PATH_STYLE is required");
+        }
+        if (value.OBJECT_STORAGE_UPLOAD_TTL_SECONDS === undefined) {
+          addProductionIssue(context, "OBJECT_STORAGE_UPLOAD_TTL_SECONDS", "OBJECT_STORAGE_UPLOAD_TTL_SECONDS is required");
+        }
+        if (value.OBJECT_STORAGE_READ_TTL_SECONDS === undefined) {
+          addProductionIssue(context, "OBJECT_STORAGE_READ_TTL_SECONDS", "OBJECT_STORAGE_READ_TTL_SECONDS is required");
+        }
+        if (value.OBJECT_STORAGE_RETENTION_DAYS === undefined) {
+          addProductionIssue(context, "OBJECT_STORAGE_RETENTION_DAYS", "OBJECT_STORAGE_RETENTION_DAYS is required");
+        }
+        if (value.OBJECT_STORAGE_SSE !== "AES256") {
+          addProductionIssue(context, "OBJECT_STORAGE_SSE", "production object storage must use AES256 server-side encryption");
+        }
+        if (value.OBJECT_SCAN_PROVIDER !== "clamav") {
+          addProductionIssue(context, "OBJECT_SCAN_PROVIDER", "S3 uploads require the ClamAV scanner");
+        }
+      } else if (storageValues.some((entry) => entry !== undefined && String(entry).length > 0)) {
+        addProductionIssue(context, "OBJECT_STORAGE_PROVIDER", "disabled object storage must not include credentials or endpoints");
+      }
+      if (value.OBJECT_SCAN_PROVIDER === "clamav") {
+        if (value.OBJECT_STORAGE_PROVIDER !== "s3") {
+          addProductionIssue(context, "OBJECT_SCAN_PROVIDER", "ClamAV requires enabled object storage");
+        }
+        if (value.CLAMAV_HOST === undefined || value.CLAMAV_HOST.length === 0) {
+          addProductionIssue(context, "CLAMAV_HOST", "CLAMAV_HOST is required");
+        } else if (
+          value.CLAMAV_HOST !== "malware-scanner"
+          && !isPrivateProviderHost(value.CLAMAV_HOST)
+        ) {
+          addProductionIssue(context, "CLAMAV_HOST", "CLAMAV_HOST must remain on the private deployment network");
+        }
+        if (value.CLAMAV_PORT === undefined) {
+          addProductionIssue(context, "CLAMAV_PORT", "CLAMAV_PORT is required");
+        }
+        if (value.CLAMAV_TIMEOUT_MS === undefined) {
+          addProductionIssue(context, "CLAMAV_TIMEOUT_MS", "CLAMAV_TIMEOUT_MS is required");
+        }
+      } else if (scannerValues.some((entry) => entry !== undefined && String(entry).length > 0)) {
+        addProductionIssue(context, "OBJECT_SCAN_PROVIDER", "disabled malware scanning must not include scanner settings");
       }
       if ([value.SMTP_HOST, value.SMTP_USERNAME, value.SMTP_PASSWORD]
         .some((entry) => (entry?.length ?? 0) > 0)) {

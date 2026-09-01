@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
-  ConfirmOcrInputSchema, CreatePrivateObjectInputSchema, ModelPurposeSchema,
-  OcrResultSchema, ReserveBudgetInputSchema,
+  CompletePrivateObjectUploadInputSchema, ConfirmOcrInputSchema,
+  CreatePrivateObjectInputSchema, CreatePrivateObjectReadGrantInputSchema,
+  DeletePrivateObjectInputSchema, ModelPurposeSchema, OcrResultSchema,
+  ReserveBudgetInputSchema, RetryOcrInputSchema, RetryPrivateObjectUploadInputSchema,
 } from "./ai-gateway.js";
 
 describe("Phase 6 gateway and OCR contracts", () => {
@@ -22,5 +24,14 @@ describe("Phase 6 gateway and OCR contracts", () => {
   it("requires confirmation for low-confidence OCR", () => {
     expect(OcrResultSchema.parse({ questionId: "018f0f4e-2a5d-7aa0-8d44-a533e0b1092c", status: "OCR_REVIEW", text: "x", confidence: 0.6 }).status).toBe("OCR_REVIEW");
     expect(ConfirmOcrInputSchema.safeParse({ confirmedText: "确认后的题目", confirmation: "CONFIRM_OCR" }).success).toBe(true);
+  });
+
+  it("requires explicit confirmations for every private-object state transition", () => {
+    expect(CompletePrivateObjectUploadInputSchema.safeParse({ confirmation: "COMPLETE_PRIVATE_OBJECT_UPLOAD" }).success).toBe(true);
+    expect(CreatePrivateObjectReadGrantInputSchema.safeParse({ confirmation: "READ_PRIVATE_OBJECT" }).success).toBe(true);
+    expect(RetryPrivateObjectUploadInputSchema.safeParse({ confirmation: "RETRY_PRIVATE_OBJECT_UPLOAD" }).success).toBe(true);
+    expect(DeletePrivateObjectInputSchema.safeParse({ confirmation: "DELETE_PRIVATE_OBJECT" }).success).toBe(true);
+    expect(RetryOcrInputSchema.safeParse({ confirmation: "RETRY_OCR" }).success).toBe(true);
+    expect(DeletePrivateObjectInputSchema.safeParse({ confirmation: "RETRY_OCR" }).success).toBe(false);
   });
 });

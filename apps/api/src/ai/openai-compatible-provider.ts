@@ -146,12 +146,26 @@ export class OpenAiCompatibleProvider implements ModelProvider {
     const developerInstruction = ocr
       ? "Extract only the visible question text. Do not infer missing content. Return confidence from 0 to 1."
       : "Return concise Chinese learning guidance using only the reviewed evidence in the input. Respect the requested tutor stage; hints must not reveal the final answer early. Do not claim unsupported facts.";
+    const imageUrl = typeof request.input.imageUrl === "string"
+      ? request.input.imageUrl
+      : typeof request.input.imageBase64 === "string" && typeof request.input.imageMimeType === "string"
+        ? `data:${request.input.imageMimeType};base64,${request.input.imageBase64}`
+        : null;
+    const redactedInput = Object.fromEntries(
+      Object.entries(request.input).filter(([key]) => key !== "imageBase64" && key !== "imageUrl"),
+    );
+    const userContent = ocr && imageUrl !== null
+      ? [
+          { type: "input_text", text: JSON.stringify({ purpose: request.purpose, input: redactedInput }) },
+          { type: "input_image", image_url: imageUrl, detail: "high" },
+        ]
+      : JSON.stringify({ purpose: request.purpose, input: redactedInput });
     return {
       model: config.model,
       reasoning: { effort: config.reasoningEffort },
       input: [
         { role: "developer", content: developerInstruction },
-        { role: "user", content: JSON.stringify({ purpose: request.purpose, input: request.input }) },
+        { role: "user", content: userContent },
       ],
       text: {
         format: {

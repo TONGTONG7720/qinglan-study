@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 
 import { selectModelProvider } from "./ai.module.js";
-import { developmentObjectStorageAvailable } from "./ocr.service.js";
 import type { ModelProvider } from "./model-gateway.service.js";
 
 function provider(name: string): ModelProvider {
@@ -32,18 +31,5 @@ describe("production provider selection", () => {
       .toBe(providers.openAiCompatible);
     expect(() => selectModelProvider("production", "fake", providers))
       .toThrow("MODEL_PROVIDER=fake is test-only");
-  });
-
-  it("keeps the private object fixture out of production", () => {
-    expect(developmentObjectStorageAvailable({ NODE_ENV: "test" })).toBe(true);
-    expect(developmentObjectStorageAvailable({
-      NODE_ENV: "development",
-      OBJECT_STORAGE_PROVIDER: "development-fixture",
-    })).toBe(true);
-    expect(developmentObjectStorageAvailable({ NODE_ENV: "development" })).toBe(false);
-    expect(developmentObjectStorageAvailable({
-      NODE_ENV: "production",
-      OBJECT_STORAGE_PROVIDER: "development-fixture",
-    })).toBe(false);
   });
 });

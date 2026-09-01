@@ -4,13 +4,17 @@ import { Injectable, NotFoundException } from "@nestjs/common";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { PrismaService } from "../common/prisma/prisma.service.js";
+import { PrivateObjectDeletionService } from "../common/storage/private-object-deletion.service.js";
 import { Prisma } from "../generated/prisma/client.js";
 
 const PayloadSchema = z.object({ requestId: z.uuid().optional(), userId: z.uuid().optional(), familyId: z.uuid().optional(), exportId: z.uuid().optional(), objectId: z.uuid().optional(), modelCallId: z.uuid().optional() }).strict();
 
 @Injectable()
 export class RetentionJobService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly objectDeletion: PrivateObjectDeletionService,
+  ) {}
 
   async run(actor: CurrentUser, input: RunRetentionJobsInput, now = new Date()): Promise<RetentionRunResponse> {
     if (!actor.roles.includes("ADMIN")) throw new NotFoundException();
@@ -52,6 +56,21 @@ export class RetentionJobService {
     } else if (job.kind === "FAMILY_PURGE") {
       const requestId = payload.requestId; const familyId = payload.familyId;
       if (requestId === undefined || familyId === undefined) throw new Error("payload");
+      await this.prisma.deletionRequest.findFirstOrThrow({
+        where: { id: requestId, familyId, type: "FAMILY", status: "PENDING", executeAfter: { lte: now } },
+      });
+      const studentIds = (await this.prisma.studentProfile.findMany({
+        where: { familyId },
+        select: { userId: true },
+      })).map((student) => student.userId);
+      const privateObjects = await this.prisma.privateObject.findMany({
+        where: { ownerStudentUserId: { in: studentIds }, status: { not: "DELETED" } },
+        select: { id: true },
+        orderBy: { id: "asc" },
+      });
+      for (const object of privateObjects) {
+        await this.objectDeletion.deleteById(object.id, "FAMILY_PURGE", null, now);
+      }
       await this.prisma.$transaction(async (transaction) => {
         const request = await transaction.deletionRequest.findFirstOrThrow({ where: { id: requestId, familyId, type: "FAMILY", status: "PENDING", executeAfter: { lte: now } } });
         const students = await transaction.studentProfile.findMany({ where: { familyId }, select: { userId: true } });
@@ -65,7 +84,7 @@ export class RetentionJobService {
       await this.prisma.modelCall.updateMany({ where: { id: payload.modelCallId }, data: { output: Prisma.DbNull } });
     } else {
       if (payload.objectId === undefined) throw new Error("payload");
-      await this.prisma.privateObject.updateMany({ where: { id: payload.objectId }, data: { status: "DELETED" } });
+      await this.objectDeletion.deleteById(payload.objectId, "RETENTION_EXPIRY", null, now);
     }
     await this.prisma.retentionJob.update({ where: { id: job.id }, data: { status: "SUCCEEDED", leaseOwner: null, leaseExpiresAt: null, lastErrorCode: null } });
   }

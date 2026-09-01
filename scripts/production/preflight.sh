@@ -36,14 +36,15 @@ for variable_name in \
   IMAGE_TAG INFRA_IMAGE_TAG DEPLOY_OWNER_USER DEPLOY_OWNER_GROUP SITE_ADDRESS ACME_EMAIL \
   ALLOWED_ORIGINS SESSION_COOKIE_NAME REQUEST_BODY_LIMIT_BYTES CSRF_PROTECTION_ENABLED \
   VITE_ENABLE_DEMO_COURSE_CATALOG VITE_QA_DEMO_BUILD VITE_RELEASE_SCOPE \
-  MODEL_PROVIDER OBJECT_STORAGE_PROVIDER EMAIL_PROVIDER \
+  MODEL_PROVIDER OBJECT_STORAGE_PROVIDER OBJECT_SCAN_PROVIDER EMAIL_PROVIDER \
   EXPECTED_MIGRATION_NAME \
   POSTGRES_DB BACKUP_SHARED_GID \
   POSTGRES_ADMIN_USER POSTGRES_MIGRATOR_USER POSTGRES_APP_USER POSTGRES_BACKUP_USER \
   BACKUP_DIR DEPLOY_STATE_DIR POSTGRES_ADMIN_PASSWORD_FILE POSTGRES_MIGRATOR_PASSWORD_FILE \
   POSTGRES_APP_PASSWORD_FILE POSTGRES_BACKUP_PASSWORD_FILE DATABASE_URL_FILE \
   MIGRATION_DATABASE_URL_FILE BACKUP_DATABASE_URL_FILE REAUTH_PROOF_SECRET_FILE \
-  INVITATION_TOKEN_SECRET_FILE MODEL_API_KEY_FILE ALERT_WEBHOOK_URL_FILE
+  INVITATION_TOKEN_SECRET_FILE MODEL_API_KEY_FILE OBJECT_STORAGE_SECRET_ACCESS_KEY_FILE \
+  ALERT_WEBHOOK_URL_FILE
 do
   require_value "$variable_name"
 done
@@ -109,10 +110,51 @@ if [ "$VITE_RELEASE_SCOPE" != "READ_ONLY_BETA" ]; then
   echo "production deployment must use VITE_RELEASE_SCOPE=READ_ONLY_BETA until full vertical services are verified" >&2
   exit 78
 fi
-if [ "$OBJECT_STORAGE_PROVIDER" != "disabled" ]; then
-  echo "OBJECT_STORAGE_PROVIDER must remain disabled until a production adapter is implemented" >&2
-  exit 78
-fi
+case "$OBJECT_STORAGE_PROVIDER" in
+  disabled)
+    if [ "$OBJECT_SCAN_PROVIDER" != "disabled" ]; then
+      echo "OBJECT_SCAN_PROVIDER must be disabled when object storage is disabled" >&2
+      exit 78
+    fi
+    ;;
+  s3)
+    require_value CLAMAV_IMAGE
+    for variable_name in \
+      OBJECT_STORAGE_ENDPOINT OBJECT_STORAGE_REGION OBJECT_STORAGE_BUCKET \
+      OBJECT_STORAGE_ACCESS_KEY_ID OBJECT_STORAGE_FORCE_PATH_STYLE \
+      OBJECT_STORAGE_UPLOAD_TTL_SECONDS OBJECT_STORAGE_READ_TTL_SECONDS \
+      OBJECT_STORAGE_RETENTION_DAYS OBJECT_STORAGE_SSE \
+      CLAMAV_HOST CLAMAV_PORT CLAMAV_TIMEOUT_MS
+    do
+      require_value "$variable_name"
+    done
+    case "$OBJECT_STORAGE_ENDPOINT" in
+      https://*) ;;
+      *) echo "OBJECT_STORAGE_ENDPOINT must use HTTPS" >&2; exit 78 ;;
+    esac
+    if [ "$OBJECT_STORAGE_SSE" != "AES256" ]; then
+      echo "OBJECT_STORAGE_SSE must be AES256" >&2
+      exit 78
+    fi
+    if [ "$OBJECT_SCAN_PROVIDER" != "clamav" ]; then
+      echo "S3 object storage requires OBJECT_SCAN_PROVIDER=clamav" >&2
+      exit 78
+    fi
+    if [ "$CLAMAV_HOST" != "malware-scanner" ] || [ "$CLAMAV_PORT" != "3310" ]; then
+      echo "ClamAV must use the private malware-scanner service on port 3310" >&2
+      exit 78
+    fi
+    case ",${COMPOSE_PROFILES:-}," in
+      *,ocr,*) ;;
+      *) echo "COMPOSE_PROFILES must include ocr when object storage is enabled" >&2; exit 78 ;;
+    esac
+    if ! printf '%s' "$CLAMAV_IMAGE" | grep -Eq '^clamav/clamav:[A-Za-z0-9._-]+@sha256:[0-9a-f]{64}$'; then
+      echo "CLAMAV_IMAGE must use an immutable sha256 digest" >&2
+      exit 78
+    fi
+    ;;
+  *) echo "OBJECT_STORAGE_PROVIDER must be disabled or s3" >&2; exit 78 ;;
+esac
 if [ "$EMAIL_PROVIDER" != "disabled" ]; then
   echo "EMAIL_PROVIDER must remain disabled until a production adapter is implemented" >&2
   exit 78
@@ -216,7 +258,7 @@ do
   fi
 done
 
-for variable_name in MODEL_API_KEY_FILE ALERT_WEBHOOK_URL_FILE; do
+for variable_name in MODEL_API_KEY_FILE OBJECT_STORAGE_SECRET_ACCESS_KEY_FILE ALERT_WEBHOOK_URL_FILE; do
   eval "secret_path=\${$variable_name}"
   if [ ! -f "$secret_path" ]; then
     echo "$variable_name is missing" >&2
@@ -233,6 +275,14 @@ for variable_name in MODEL_API_KEY_FILE ALERT_WEBHOOK_URL_FILE; do
     fi
   fi
 done
+
+if [ "$OBJECT_STORAGE_PROVIDER" = "s3" ]; then
+  if [ ! -s "$OBJECT_STORAGE_SECRET_ACCESS_KEY_FILE" ] \
+    || [ "$(wc -c <"$OBJECT_STORAGE_SECRET_ACCESS_KEY_FILE")" -lt 20 ]; then
+    echo "OBJECT_STORAGE_SECRET_ACCESS_KEY_FILE must contain the least-privilege bucket secret" >&2
+    exit 78
+  fi
+fi
 
 for secret_path in \
   "$POSTGRES_ADMIN_PASSWORD_FILE" "$POSTGRES_MIGRATOR_PASSWORD_FILE" \

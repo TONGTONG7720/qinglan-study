@@ -658,9 +658,19 @@ enum BudgetReservationStatus {
 
 enum PrivateObjectStatus {
   PENDING_UPLOAD
+  VERIFYING
   READY
   QUARANTINED
+  DELETE_PENDING
+  DELETE_FAILED
   DELETED
+}
+
+enum ObjectScanStatus {
+  PENDING
+  CLEAN
+  INFECTED
+  FAILED
 }
 
 enum QuestionStatus {
@@ -730,18 +740,34 @@ model UsageLedger {
 model PrivateObject {
   id                 String              @id @default(uuid()) @db.Uuid
   ownerStudentUserId String              @db.Uuid
+  dedupeKey          String              @unique @db.Char(64)
   storageKey         String              @unique @db.VarChar(240)
+  uploadKey          String?             @unique @db.VarChar(240)
   mimeType           String              @db.VarChar(40)
   sizeBytes          Int
   width              Int
   height             Int
   sha256             String              @db.Char(64)
   status             PrivateObjectStatus @default(PENDING_UPLOAD)
+  scanStatus         ObjectScanStatus    @default(PENDING)
   scanPassed         Boolean             @default(false)
+  uploadExpiresAt    DateTime?           @db.Timestamptz(6)
+  uploadedAt         DateTime?           @db.Timestamptz(6)
+  verifiedAt         DateTime?           @db.Timestamptz(6)
+  scanCompletedAt    DateTime?           @db.Timestamptz(6)
+  storageVersionId   String?             @db.VarChar(255)
+  storageETag        String?             @db.VarChar(255)
+  lastErrorCode      String?             @db.VarChar(80)
+  deletedAt          DateTime?           @db.Timestamptz(6)
+  deletionReceipt    Json?
   expiresAt          DateTime            @db.Timestamptz(6)
   createdAt          DateTime            @default(now()) @db.Timestamptz(6)
+  updatedAt          DateTime            @updatedAt @db.Timestamptz(6)
   owner              User                @relation(fields: [ownerStudentUserId], references: [id], onDelete: Cascade)
   question           Question?
+
+  @@index([ownerStudentUserId, status, expiresAt])
+  @@index([status, uploadExpiresAt])
 }
 
 model Question {
@@ -754,6 +780,8 @@ model Question {
   confirmedText  String?        @db.Text
   providerCallId String?        @db.VarChar(120)
   errorCode      String?        @db.VarChar(80)
+  attemptCount   Int            @default(0)
+  lastAttemptAt  DateTime?      @db.Timestamptz(6)
   createdAt      DateTime       @default(now()) @db.Timestamptz(6)
   updatedAt      DateTime       @updatedAt @db.Timestamptz(6)
   student        User           @relation(fields: [studentUserId], references: [id], onDelete: Cascade)

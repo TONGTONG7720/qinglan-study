@@ -86,4 +86,37 @@ describe("OpenAiCompatibleProvider", () => {
     })).rejects.toThrow("OCR_INPUT_ASSET_UNAVAILABLE");
     expect(fetchMock).not.toHaveBeenCalled();
   });
+
+  it("sends verified OCR bytes as an input image without duplicating them in prompt text", async () => {
+    const fetchMock = vi.fn<typeof fetch>(() => Promise.resolve(new Response(JSON.stringify({
+      id: "resp_ocr_123",
+      model: "gpt-5.6-terra",
+      status: "completed",
+      output: [{ content: [{ type: "output_text", text: "{\"text\":\"题目\",\"confidence\":0.9}" }] }],
+    }), { status: 200, headers: { "Content-Type": "application/json" } })));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await new OpenAiCompatibleProvider().call({
+      purpose: "OCR",
+      dedupeKey: "provider-test-dedupe-0003",
+      input: {
+        sha256: "1".repeat(64),
+        imageMimeType: "image/png",
+        imageBase64: "AQIDBA==",
+      },
+    });
+    const request = fetchMock.mock.calls[0]?.[1];
+    if (typeof request?.body !== "string") throw new Error("Expected request JSON");
+    const body = JSON.parse(request.body) as {
+      input: { role: string; content: string | { type: string; text?: string; image_url?: string }[] }[];
+    };
+    const user = body.input.find((item) => item.role === "user");
+    expect(Array.isArray(user?.content)).toBe(true);
+    if (!Array.isArray(user?.content)) throw new Error("Expected multimodal content");
+    expect(user.content[0]?.text).not.toContain("AQIDBA==");
+    expect(user.content[1]).toMatchObject({
+      type: "input_image",
+      image_url: "data:image/png;base64,AQIDBA==",
+    });
+  });
 });

@@ -2,17 +2,25 @@ import type { HealthResponse } from "@study/contracts";
 import { Controller, Get, ServiceUnavailableException } from "@nestjs/common";
 
 import { PrismaService } from "../common/prisma/prisma.service.js";
+import { ClamAvScannerService } from "../common/storage/clamav-scanner.service.js";
+import { S3ObjectStorageService } from "../common/storage/s3-object-storage.service.js";
 
 interface ReadinessResponse extends HealthResponse {
   checks: {
     database: "ok";
     migrations: "ok";
+    objectStorage: "ok" | "disabled";
+    malwareScanner: "ok" | "disabled";
   };
 }
 
 @Controller("v1/health")
 export class HealthController {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly storage: S3ObjectStorageService,
+    private readonly scanner: ClamAvScannerService,
+  ) {}
 
   @Get()
   getHealth(): HealthResponse {
@@ -50,12 +58,23 @@ export class HealthController {
           throw new ServiceUnavailableException();
         }
       }
+      if (this.storage.isEnabled() !== this.scanner.isEnabled()) {
+        throw new ServiceUnavailableException();
+      }
+      if (this.storage.isEnabled()) {
+        await Promise.all([this.storage.probe(), this.scanner.probe()]);
+      }
     } catch {
       throw new ServiceUnavailableException();
     }
     return {
       ...this.getHealth(),
-      checks: { database: "ok", migrations: "ok" },
+      checks: {
+        database: "ok",
+        migrations: "ok",
+        objectStorage: this.storage.isEnabled() ? "ok" : "disabled",
+        malwareScanner: this.scanner.isEnabled() ? "ok" : "disabled",
+      },
     };
   }
 }
