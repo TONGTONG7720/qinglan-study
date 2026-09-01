@@ -166,6 +166,7 @@ function validateProductionEnvironment(
       CSRF_PROTECTION_ENABLED: z.literal("true"),
       VITE_ENABLE_DEMO_COURSE_CATALOG: z.literal("false"),
       VITE_QA_DEMO_BUILD: z.literal("false"),
+      VITE_RELEASE_SCOPE: z.literal("READ_ONLY_BETA"),
       MODEL_PROVIDER: z.enum(["disabled", "openai-compatible"]),
       OBJECT_STORAGE_PROVIDER: z.literal("disabled"),
       EMAIL_PROVIDER: z.literal("disabled"),

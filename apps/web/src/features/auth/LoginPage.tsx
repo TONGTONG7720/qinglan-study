@@ -4,21 +4,24 @@ import { Link, Navigate, useLocation, useNavigate } from "react-router-dom";
 import { HttpError } from "../../api/http-client";
 import { loadCurrentUser, login } from "../../api/auth";
 import { Icon } from "../../components/Icon";
+import { useReleaseScope } from "../../config/release-scope";
+import { isReadOnlyBetaStudentLocation, type ReleaseScope } from "../../config/release-scope-policy";
 import { useDocumentMetadata } from "../../hooks/use-document-metadata";
 
 interface LoginLocationState {
   readonly from?: string;
 }
 
-function roleHome(roles: readonly string[]): string | null {
+function roleHome(roles: readonly string[], releaseScope: ReleaseScope): string | null {
   if (roles.length !== 1) return null;
-  if (roles[0] === "ADMIN") return "/admin/overview";
-  if (roles[0] === "GUARDIAN") return "/guardian/overview";
+  if (roles[0] === "ADMIN") return releaseScope === "READ_ONLY_BETA" ? "/limited-release" : "/admin/overview";
+  if (roles[0] === "GUARDIAN") return releaseScope === "READ_ONLY_BETA" ? "/limited-release" : "/guardian/overview";
   if (roles[0] === "STUDENT") return "/student/today";
   return null;
 }
 
 export function LoginPage() {
+  const releaseScope = useReleaseScope();
   useDocumentMetadata("登录 · 清朗学习系统", "登录清朗学习系统并安全返回获授权的学习空间。");
   const navigate = useNavigate();
   const location = useLocation();
@@ -36,7 +39,7 @@ export function LoginPage() {
     void loadCurrentUser(controller.signal).then(async (result) => {
       if (!active) return;
       if (result.status === "authenticated") {
-        const target = roleHome(result.user.roles);
+        const target = roleHome(result.user.roles, releaseScope);
         if (target !== null) await navigate(target, { replace: true });
         else setMessage("当前会话的安全落点尚未确定，请退出后联系管理员处理。");
       }
@@ -49,7 +52,7 @@ export function LoginPage() {
       controller.abort();
       setPassword("");
     };
-  }, [navigate]);
+  }, [navigate, releaseScope]);
 
   async function submit(event: SyntheticEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault();
@@ -63,14 +66,16 @@ export function LoginPage() {
     setSubmitting(true);
     try {
       const user = await login({ loginId, password });
-      const fallback = roleHome(user.roles);
+      const fallback = roleHome(user.roles, releaseScope);
       if (fallback === null) {
         setPassword("");
         setMessage("登录已确认，但安全落点尚未确定。系统不会在客户端猜测角色入口。");
         return;
       }
       const requested = state?.from;
-      const destination = requested?.startsWith("/") === true ? requested : fallback;
+      const requestedAllowed = requested?.startsWith("/") === true
+        && (releaseScope !== "READ_ONLY_BETA" || isReadOnlyBetaStudentLocation(requested));
+      const destination = requestedAllowed ? requested : fallback;
       await navigate(destination, { replace: true });
     } catch (error: unknown) {
       if (error instanceof HttpError && (error.status === 400 || error.status === 401)) {
@@ -80,7 +85,7 @@ export function LoginPage() {
       } else {
         const current = await loadCurrentUser();
         if (current.status === "authenticated") {
-          const target = roleHome(current.user.roles);
+          const target = roleHome(current.user.roles, releaseScope);
           if (target !== null) {
             setPassword("");
             await navigate(target, { replace: true });
@@ -139,14 +144,18 @@ export function LoginPage() {
           />
           <label htmlFor="login-password">密码</label>
           <div className="auth-password-field"><input autoComplete="current-password" id="login-password" maxLength={128} minLength={12} onChange={(event) => { setPassword(event.target.value); }} placeholder="请输入密码" required type={passwordVisible ? "text" : "password"} value={password} /><button aria-label={passwordVisible ? "隐藏密码" : "显示密码"} aria-pressed={passwordVisible} onClick={() => { setPasswordVisible((visible) => !visible); }} type="button"><Icon name="eye" size={18} /></button></div>
-          <Link className="auth-forgot" to="/account/security">忘记密码？</Link>
+          {releaseScope === "READ_ONLY_BETA"
+            ? <span aria-disabled="true" className="auth-forgot is-disabled">密码找回暂未开放</span>
+            : <Link className="auth-forgot" to="/account/security">忘记密码？</Link>}
           {message === null ? null : <p className="auth-error" role="alert">{message}</p>}
           <button className="auth-submit" disabled={submitting} type="submit">
             <span>{submitting ? "正在登录…" : "登录"}</span>
             <Icon name="arrowRight" size={18} />
           </button>
         </form>
-        <p className="auth-invite">收到家长邀请？<Link to="/invite/validate">验证邀请</Link></p>
+        <p className="auth-invite">{releaseScope === "READ_ONLY_BETA"
+          ? "邀请验证暂未开放；首发仅供已创建账号登录。"
+          : <>收到家长邀请？<Link to="/invite/validate">验证邀请</Link></>}</p>
         <footer>
           <Icon name="shieldCheck" size={18} />
           <p>登录反馈不会显示账号是否存在、是否停用或所属角色。<br />登录成功后，系统将按真实权限进入安全首页。</p>

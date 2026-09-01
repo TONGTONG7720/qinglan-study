@@ -1,6 +1,8 @@
 import { lazy, Suspense } from "react";
-import { Navigate, Route, Routes } from "react-router-dom";
+import { Navigate, Route, Routes, useSearchParams } from "react-router-dom";
 
+import { ReleaseScopeProvider, runtimeReleaseScope } from "./config/release-scope";
+import type { ReleaseScope } from "./config/release-scope-policy";
 import { LoginPage } from "./features/auth/LoginPage";
 import { CanonicalStudentPage, type CanonicalStudentPageProps } from "./features/routes/CanonicalStudentPage";
 import { PlannedSurfacePage, type PlannedRole } from "./features/routes/PlannedSurfacePage";
@@ -97,25 +99,64 @@ const studentRoutes: readonly StudentRouteSpec[] = [
   { path: "/student/settings/family-privacy", surface: "learn", view: "family-privacy" },
 ];
 
+const readOnlyBetaBoundaryPaths = [
+  "/invite/*",
+  "/register/*",
+  "/onboarding/*",
+  "/account/*",
+  "/guardian/*",
+  "/admin/*",
+  "/student/*",
+] as const;
+
 function RouteLoading() { return <main className="page-loading standalone" aria-label="正在打开页面" role="status" />; }
 
-export function App() {
+function StudentSurface({
+  releaseScope,
+  surface,
+}: {
+  readonly releaseScope: ReleaseScope;
+  readonly surface: "today" | "learn";
+}) {
+  const [searchParams] = useSearchParams();
+  if (releaseScope === "READ_ONLY_BETA" && searchParams.has("view")) {
+    return <SystemStatePage kind="limited-release" />;
+  }
+  return surface === "today" ? <StudentHomePage /> : <CourseMaterialsPage />;
+}
+
+function ApplicationRoutes({ releaseScope }: { readonly releaseScope: ReleaseScope }) {
+  return <Routes>
+    <Route element={<Navigate replace to={releaseScope === "READ_ONLY_BETA" ? "/login" : "/student/today"} />} path="/" />
+    <Route element={<LoginPage />} path="/login" />
+    <Route element={<SystemStatePage kind="session-expired" />} path="/session-expired" />
+    <Route element={<SystemStatePage kind="offline" />} path="/offline" />
+    <Route element={<SystemStatePage kind="error" />} path="/error-recovery" />
+    <Route element={<SystemStatePage kind="limited-release" />} path="/limited-release" />
+    <Route element={<StudentSurface releaseScope={releaseScope} surface="today" />} path="/student/today" />
+    <Route element={<StudentSurface releaseScope={releaseScope} surface="learn" />} path="/student/learn" />
+    {releaseScope === "FULL_PREVIEW"
+      ? studentRoutes.map(({ path, ...props }) => <Route key={path} element={<CanonicalStudentPage {...props} />} path={path} />)
+      : readOnlyBetaBoundaryPaths.map((path) => <Route key={path} element={<SystemStatePage kind="limited-release" />} path={path} />)}
+    {releaseScope === "FULL_PREVIEW"
+      ? plannedRoutes.map((route) => <Route key={`${route.pageId}:${route.path}`} element={<PlannedSurfacePage pageId={route.pageId} role={route.role} title={route.title} />} path={route.path} />)
+      : null}
+    <Route element={<SystemStatePage kind="not-found" />} path="*" />
+  </Routes>;
+}
+
+export interface AppProps {
+  readonly releaseScope?: ReleaseScope;
+}
+
+export function App({ releaseScope = runtimeReleaseScope }: AppProps = {}) {
   return (
-    <GlobalErrorBoundary>
-      <Suspense fallback={<RouteLoading />}>
-        <Routes>
-          <Route element={<Navigate replace to="/student/today" />} path="/" />
-          <Route element={<LoginPage />} path="/login" />
-          <Route element={<SystemStatePage kind="session-expired" />} path="/session-expired" />
-          <Route element={<SystemStatePage kind="offline" />} path="/offline" />
-          <Route element={<SystemStatePage kind="error" />} path="/error-recovery" />
-          <Route element={<StudentHomePage />} path="/student/today" />
-          <Route element={<CourseMaterialsPage />} path="/student/learn" />
-          {studentRoutes.map(({ path, ...props }) => <Route key={path} element={<CanonicalStudentPage {...props} />} path={path} />)}
-          {plannedRoutes.map((route) => <Route key={`${route.pageId}:${route.path}`} element={<PlannedSurfacePage pageId={route.pageId} role={route.role} title={route.title} />} path={route.path} />)}
-          <Route element={<SystemStatePage kind="not-found" />} path="*" />
-        </Routes>
-      </Suspense>
-    </GlobalErrorBoundary>
+    <ReleaseScopeProvider scope={releaseScope}>
+      <GlobalErrorBoundary>
+        <Suspense fallback={<RouteLoading />}>
+          <ApplicationRoutes releaseScope={releaseScope} />
+        </Suspense>
+      </GlobalErrorBoundary>
+    </ReleaseScopeProvider>
   );
 }

@@ -24,10 +24,13 @@ RUN pnpm --filter @study/contracts build \
   && node --input-type=module --eval "await import('@study/contracts')"
 ARG VITE_ENABLE_DEMO_COURSE_CATALOG=false
 ARG VITE_QA_DEMO_BUILD=false
+ARG VITE_RELEASE_SCOPE=READ_ONLY_BETA
 ENV VITE_ENABLE_DEMO_COURSE_CATALOG=$VITE_ENABLE_DEMO_COURSE_CATALOG
 ENV VITE_QA_DEMO_BUILD=$VITE_QA_DEMO_BUILD
+ENV VITE_RELEASE_SCOPE=$VITE_RELEASE_SCOPE
 RUN test "$VITE_ENABLE_DEMO_COURSE_CATALOG" = "false" \
   && test "$VITE_QA_DEMO_BUILD" = "false" \
+  && test "$VITE_RELEASE_SCOPE" = "READ_ONLY_BETA" \
   && pnpm --filter @study/web build
 
 FROM caddy:2.11.4-alpine@sha256:5f5c8640aae01df9654968d946d8f1a56c497f1dd5c5cda4cf95ab7c14d58648 AS gateway

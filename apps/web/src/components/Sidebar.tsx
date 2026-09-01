@@ -1,5 +1,6 @@
 import type { CurrentUserResult } from "../api/auth";
 import { Link, NavLink } from "react-router-dom";
+import { useReleaseScope } from "../config/release-scope";
 import { Icon } from "./Icon";
 import type { IconName } from "./Icon";
 
@@ -47,6 +48,10 @@ function userPresentation(currentUser: CurrentUserResult, demoActive: boolean) {
 }
 
 export function Sidebar({ currentUser, demoActive, currentItemId, profileActive = false }: SidebarProps) {
+  const releaseScope = useReleaseScope();
+  const visibleNavigationItems = releaseScope === "READ_ONLY_BETA"
+    ? navigationItems.filter((item) => item.id === "student-today" || item.id === "student-learn")
+    : navigationItems;
   const user = userPresentation(currentUser, demoActive);
   const initial = user.name.trim().slice(0, 1) || "清";
 
@@ -60,8 +65,15 @@ export function Sidebar({ currentUser, demoActive, currentItemId, profileActive 
         <span aria-label="清朗印章" className="brand-seal">清朗</span>
       </div>
 
+      {releaseScope === "READ_ONLY_BETA" ? (
+        <p className="sidebar-release-scope">
+          <Icon name="shieldCheck" size={16} />
+          <span><strong>邀请制只读 Beta</strong><small>仅开放本人学习概览</small></span>
+        </p>
+      ) : null}
+
       <nav className="sidebar-nav" aria-label="学习功能">
-        {navigationItems.map((item) =>
+        {visibleNavigationItems.map((item) =>
           item.route !== undefined && currentItemId !== undefined ? (
             <Link
               aria-current={currentItemId === item.id ? "page" : undefined}

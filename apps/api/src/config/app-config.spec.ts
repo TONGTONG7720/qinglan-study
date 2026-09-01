@@ -20,9 +20,10 @@ function productionEnvironment(): NodeJS.ProcessEnv {
     SESSION_COOKIE_SECURE: "true",
     REAUTH_PROOF_SECRET: reauthenticationSecret,
     INVITATION_TOKEN_SECRET: invitationSecret,
-    EXPECTED_MIGRATION_NAME: "20260827032650_question_bank_foundation",
+    EXPECTED_MIGRATION_NAME: "20260901090000_question_bank_release_gates",
     VITE_ENABLE_DEMO_COURSE_CATALOG: "false",
     VITE_QA_DEMO_BUILD: "false",
+    VITE_RELEASE_SCOPE: "READ_ONLY_BETA",
     MODEL_PROVIDER: "disabled",
     OBJECT_STORAGE_PROVIDER: "disabled",
     EMAIL_PROVIDER: "disabled",
@@ -80,6 +81,7 @@ describe("readAppConfig", () => {
     "CSRF_PROTECTION_ENABLED",
     "VITE_ENABLE_DEMO_COURSE_CATALOG",
     "VITE_QA_DEMO_BUILD",
+    "VITE_RELEASE_SCOPE",
     "MODEL_PROVIDER",
     "OBJECT_STORAGE_PROVIDER",
     "EMAIL_PROVIDER",
@@ -97,6 +99,10 @@ describe("readAppConfig", () => {
     expect(() => readAppConfig({
       ...productionEnvironment(),
       VITE_ENABLE_DEMO_COURSE_CATALOG: "true",
+    })).toThrow();
+    expect(() => readAppConfig({
+      ...productionEnvironment(),
+      VITE_RELEASE_SCOPE: "FULL_PREVIEW",
     })).toThrow();
     expect(() => readAppConfig({
       ...productionEnvironment(),

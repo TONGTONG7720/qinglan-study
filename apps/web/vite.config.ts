@@ -3,10 +3,13 @@ import { defineConfig } from "vitest/config";
 import { loadEnv } from "vite";
 import { fileURLToPath, URL } from "node:url";
 
+import { resolveReleaseScope } from "./src/config/release-scope-policy.js";
+
 export function assertProductionBuildEnvironment(
   mode: string,
   environment: Readonly<Record<string, string | undefined>>,
 ): void {
+  resolveReleaseScope(mode, environment.VITE_RELEASE_SCOPE);
   if (
     mode === "production"
     && (
