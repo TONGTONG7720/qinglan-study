@@ -23,6 +23,8 @@
 .system-actions { display: flex; flex-wrap: wrap; gap: 14px; padding-top: 32px; }
 .system-actions a, .system-actions button { display: inline-flex; min-height: 48px; align-items: center; justify-content: center; gap: 12px; padding: 0 20px; border: 1px solid var(--ql-action-primary); border-radius: var(--ql-radius-xs); text-decoration: none; }
 .system-primary { background: var(--ql-action-primary); color: var(--ql-action-on-primary); }
+.system-actions button.system-primary { background: var(--ql-action-primary); color: var(--ql-action-on-primary); }
 .system-primary .ql-icon { filter: brightness(0) invert(1); }
 .system-actions button { background: transparent; color: var(--ql-text-accent); }
+.system-action-status { margin-top: 16px; color: var(--ql-text-secondary); font-size: .82rem; }
 @media (max-width: 840px) { .system-page { grid-template-columns: 1fr; } .system-cover { min-height: 250px; padding: 30px 24px; } .system-cover > div:last-child strong { font-size: 3rem; } .system-content { padding: 42px 24px 56px; } .system-status-strip, .system-path { grid-template-columns: 1fr; } .system-status-strip span + span { border-top: 1px solid var(--ql-border-subtle); border-left: 0; } }

@@ -5,7 +5,7 @@ import {
 import type { StudentTextbookContextResponse, SubjectCode as ContractSubjectCode } from "@study/contracts";
 import { loadCourseCatalogDemo } from "#course-catalog-demo-provider";
 
-import { requestJson } from "../../api/http-client";
+import { isAbortError, isRecoverableReadError, requestJson } from "../../api/http-client";
 import type { CourseCatalog, CourseCatalogResult, CourseSummary, SubjectCode, Term } from "./types";
 
 export interface CourseMaterialsRepository {
@@ -161,9 +161,7 @@ export function createCourseMaterialsRepository(
         ).filter((context): context is StudentTextbookContextResponse => context !== undefined);
         return { status: "ready", catalog: catalogFromContexts(contexts) };
       } catch (error: unknown) {
-        if (error instanceof DOMException && error.name === "AbortError") {
-          throw error;
-        }
+        if (isAbortError(error) || isRecoverableReadError(error)) throw error;
         return fixtureOrUnavailable(signal);
       }
     },

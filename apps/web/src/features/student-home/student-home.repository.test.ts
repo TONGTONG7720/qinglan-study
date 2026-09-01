@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import { HttpError, RequestNetworkError } from "../../api/http-client";
 import { createStudentHomeRepository } from "./student-home.repository";
 
 describe("student home repository", () => {
@@ -58,5 +59,19 @@ describe("student home repository", () => {
       expect(result.snapshot.source).toBe("API");
       expect(result.snapshot.dailyPlan.tasks[0]?.title).toBe("后端计划任务");
     }
+  });
+
+  it("does not collapse session and network recovery failures into generic unavailable", async () => {
+    const expired = createStudentHomeRepository({
+      demoEnabled: false,
+      request: () => Promise.reject(new HttpError(401, "expired")),
+    });
+    await expect(expired.loadToday("a0000000-0000-4000-8000-000000000002")).rejects.toMatchObject({ status: 401 });
+
+    const offline = createStudentHomeRepository({
+      demoEnabled: false,
+      request: () => Promise.reject(new RequestNetworkError(true)),
+    });
+    await expect(offline.loadToday("a0000000-0000-4000-8000-000000000002")).rejects.toMatchObject({ offline: true });
   });
 });
