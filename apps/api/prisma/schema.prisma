@@ -149,9 +149,14 @@ enum QuestionBankValidationKind {
   AUTO_SOLVE
   DEDUPLICATION
   SUBJECT_FACT_CHECK
+  INDEPENDENT_SOLVE
+  SEMANTIC_DEDUPLICATION
+  HUMAN_SUBJECT_REVIEW
+  LICENSE_REVIEW
 }
 
 enum QuestionBankValidationStatus {
+  PENDING
   PASSED
   FAILED
 }
@@ -162,54 +167,70 @@ enum QuestionBankReviewDecision {
   REJECTED
 }
 
+enum QuestionBankSemanticDuplicateDecision {
+  PENDING
+  DISTINCT
+  DUPLICATE
+}
+
+enum QuestionBankReleaseStatus {
+  ACTIVE
+  ROLLED_BACK
+}
+
 model User {
-  id                        String                        @id @default(uuid()) @db.Uuid
-  loginId                   String                        @unique @db.VarChar(120)
-  passwordHash              String                        @db.VarChar(255)
-  displayName               String                        @db.VarChar(60)
-  roles                     Role[]
-  status                    UserStatus                    @default(ACTIVE)
-  createdAt                 DateTime                      @default(now()) @db.Timestamptz(6)
-  updatedAt                 DateTime                      @updatedAt @db.Timestamptz(6)
-  sessions                  Session[]
-  memberships               FamilyMembership[]
-  studentProfile            StudentProfile?
-  guardianLinks             GuardianStudentRelation[]     @relation("GuardianLinks")
-  studentLinks              GuardianStudentRelation[]     @relation("StudentLinks")
-  consentsGranted           Consent[]                     @relation("ConsentGuardian")
-  consentsReceived          Consent[]                     @relation("ConsentStudent")
-  invitationsIssued         Invitation[]                  @relation("InvitationIssuer")
-  joinAuthorizations        JoinInvitationAuthorization[] @relation("JoinAuthorizationOwner")
-  transfersProposed         OwnershipTransfer[]           @relation("OwnershipTransferProposer")
-  transfersTargeted         OwnershipTransfer[]           @relation("OwnershipTransferTarget")
-  textbookEditionsVerified  TextbookEdition[]             @relation("TextbookVerifier")
-  textbookContextsAsStudent StudentTextbookContext[]      @relation("StudentTextbookStudent")
-  textbookContextsSubmitted StudentTextbookContext[]      @relation("TextbookContextSubmitter")
-  textbookContextsVerified  StudentTextbookContext[]      @relation("TextbookContextVerifier")
-  planCandidates            PlanCandidate[]
-  dailyPlans                DailyPlan[]
-  learningEvidence          LearningEvidence[]
-  budgetReservations        BudgetReservation[]
-  privateObjects            PrivateObject[]
-  questions                 Question[]
-  modelCalls                ModelCall[]
-  reviewedContents          ReviewedContent[]
-  textbookAssetsUploaded    TextbookAsset[]               @relation("TextbookAssetUploader")
-  textbookAssetsApproved    TextbookAsset[]               @relation("TextbookAssetApprover")
-  questionBankItemsCreated  QuestionBankItem[]            @relation("QuestionBankItemCreator")
-  questionBankItemsReviewed QuestionBankItem[]            @relation("QuestionBankItemReviewer")
-  questionBankReviews       QuestionBankReview[]
-  tutorSessions             TutorSession[]
-  mistakes                  Mistake[]
-  recoveryAttempts          RecoveryAttempt[]
-  masteryEvidence           MasteryEvidence[]
-  masteryStates             MasteryState[]
-  examsAsStudent            Exam[]                        @relation("ExamStudent")
-  examsCreated              Exam[]                        @relation("ExamCreator")
-  remediationLinks          RemediationLink[]
-  weeklyReports             WeeklyReport[]
-  auditEvents               AuditEvent[]                  @relation("AuditActor")
-  operations                Operation[]
+  id                             String                          @id @default(uuid()) @db.Uuid
+  loginId                        String                          @unique @db.VarChar(120)
+  passwordHash                   String                          @db.VarChar(255)
+  displayName                    String                          @db.VarChar(60)
+  roles                          Role[]
+  status                         UserStatus                      @default(ACTIVE)
+  createdAt                      DateTime                        @default(now()) @db.Timestamptz(6)
+  updatedAt                      DateTime                        @updatedAt @db.Timestamptz(6)
+  sessions                       Session[]
+  memberships                    FamilyMembership[]
+  studentProfile                 StudentProfile?
+  guardianLinks                  GuardianStudentRelation[]       @relation("GuardianLinks")
+  studentLinks                   GuardianStudentRelation[]       @relation("StudentLinks")
+  consentsGranted                Consent[]                       @relation("ConsentGuardian")
+  consentsReceived               Consent[]                       @relation("ConsentStudent")
+  invitationsIssued              Invitation[]                    @relation("InvitationIssuer")
+  joinAuthorizations             JoinInvitationAuthorization[]   @relation("JoinAuthorizationOwner")
+  transfersProposed              OwnershipTransfer[]             @relation("OwnershipTransferProposer")
+  transfersTargeted              OwnershipTransfer[]             @relation("OwnershipTransferTarget")
+  textbookEditionsVerified       TextbookEdition[]               @relation("TextbookVerifier")
+  textbookContextsAsStudent      StudentTextbookContext[]        @relation("StudentTextbookStudent")
+  textbookContextsSubmitted      StudentTextbookContext[]        @relation("TextbookContextSubmitter")
+  textbookContextsVerified       StudentTextbookContext[]        @relation("TextbookContextVerifier")
+  planCandidates                 PlanCandidate[]
+  dailyPlans                     DailyPlan[]
+  learningEvidence               LearningEvidence[]
+  budgetReservations             BudgetReservation[]
+  privateObjects                 PrivateObject[]
+  questions                      Question[]
+  modelCalls                     ModelCall[]
+  reviewedContents               ReviewedContent[]
+  textbookAssetsUploaded         TextbookAsset[]                 @relation("TextbookAssetUploader")
+  textbookAssetsApproved         TextbookAsset[]                 @relation("TextbookAssetApprover")
+  questionBankItemsCreated       QuestionBankItem[]              @relation("QuestionBankItemCreator")
+  questionBankItemsReviewed      QuestionBankItem[]              @relation("QuestionBankItemReviewer")
+  questionBankReviews            QuestionBankReview[]
+  questionBankValidations        QuestionBankValidation[]        @relation("QuestionBankValidationPerformer")
+  semanticDuplicateReviews       QuestionBankSemanticDuplicate[] @relation("QuestionBankSemanticDuplicateReviewer")
+  questionBankLicenseReviews     QuestionBankLicenseReview[]     @relation("QuestionBankLicenseReviewer")
+  questionBankReleasesPublished  QuestionBankRelease[]           @relation("QuestionBankReleasePublisher")
+  questionBankReleasesRolledBack QuestionBankRelease[]           @relation("QuestionBankReleaseRollbackActor")
+  tutorSessions                  TutorSession[]
+  mistakes                       Mistake[]
+  recoveryAttempts               RecoveryAttempt[]
+  masteryEvidence                MasteryEvidence[]
+  masteryStates                  MasteryState[]
+  examsAsStudent                 Exam[]                          @relation("ExamStudent")
+  examsCreated                   Exam[]                          @relation("ExamCreator")
+  remediationLinks               RemediationLink[]
+  weeklyReports                  WeeklyReport[]
+  auditEvents                    AuditEvent[]                    @relation("AuditActor")
+  operations                     Operation[]
 }
 
 model Session {
@@ -794,43 +815,55 @@ model ReviewedContent {
 }
 
 model QuestionBankItem {
-  id                 String                          @id @default(uuid()) @db.Uuid
-  stableKey          String                          @unique @db.VarChar(120)
-  subjectCode        SubjectCode
-  grade              Int
-  textbookEditionId  String                          @db.Uuid
-  unitId             String                          @db.Uuid
-  type               QuestionBankType
-  difficulty         Int
-  abilityLevel       KnowledgeAbilityLevel
-  stem               String                          @db.Text
-  options            Json?
-  answer             Json
-  explanation        String                          @db.Text
-  hints              Json
-  commonErrorTargets Json                            @default("[]")
-  sourceType         QuestionBankSourceType
-  licenseStatus      ContentLicenseStatus
-  sourceReferences   Json                            @default("[]")
-  generationModel    String?                         @db.VarChar(120)
-  promptVersion      String?                         @db.VarChar(80)
-  contentHash        String                          @db.Char(64)
-  dedupeHash         String                          @db.Char(64)
-  version            Int                             @default(1)
-  status             QuestionBankStatus              @default(DRAFT)
-  createdByUserId    String                          @db.Uuid
-  reviewedByUserId   String?                         @db.Uuid
-  reviewedAt         DateTime?                       @db.Timestamptz(6)
-  publishedAt        DateTime?                       @db.Timestamptz(6)
-  createdAt          DateTime                        @default(now()) @db.Timestamptz(6)
-  updatedAt          DateTime                        @updatedAt @db.Timestamptz(6)
-  textbookEdition    TextbookEdition                 @relation(fields: [textbookEditionId], references: [id], onDelete: Cascade)
-  unit               Unit                            @relation(fields: [unitId], references: [id], onDelete: Cascade)
-  createdBy          User                            @relation("QuestionBankItemCreator", fields: [createdByUserId], references: [id], onDelete: Restrict)
-  reviewedBy         User?                           @relation("QuestionBankItemReviewer", fields: [reviewedByUserId], references: [id], onDelete: SetNull)
-  knowledgeLinks     QuestionBankItemKnowledgeNode[]
-  validations        QuestionBankValidation[]
-  reviews            QuestionBankReview[]
+  id                          String                          @id @default(uuid()) @db.Uuid
+  stableKey                   String                          @unique @db.VarChar(120)
+  subjectCode                 SubjectCode
+  grade                       Int
+  textbookEditionId           String                          @db.Uuid
+  unitId                      String                          @db.Uuid
+  type                        QuestionBankType
+  difficulty                  Int
+  abilityLevel                KnowledgeAbilityLevel
+  stem                        String                          @db.Text
+  options                     Json?
+  answer                      Json
+  explanation                 String                          @db.Text
+  hints                       Json
+  commonErrorTargets          Json                            @default("[]")
+  sourceType                  QuestionBankSourceType
+  licenseStatus               ContentLicenseStatus
+  sourceReferences            Json                            @default("[]")
+  generationModel             String?                         @db.VarChar(120)
+  promptVersion               String?                         @db.VarChar(80)
+  contentHash                 String                          @db.Char(64)
+  dedupeHash                  String                          @db.Char(64)
+  semanticEmbedding           Unsupported("vector")?
+  semanticEmbeddingModel      String?                         @db.VarChar(120)
+  semanticEmbeddingDimensions Int?
+  semanticSourceHash          String?                         @db.Char(64)
+  semanticEmbeddingHash       String?                         @db.Char(64)
+  semanticEmbeddedAt          DateTime?                       @db.Timestamptz(6)
+  version                     Int                             @default(1)
+  status                      QuestionBankStatus              @default(DRAFT)
+  createdByUserId             String                          @db.Uuid
+  reviewedByUserId            String?                         @db.Uuid
+  reviewedAt                  DateTime?                       @db.Timestamptz(6)
+  publishedAt                 DateTime?                       @db.Timestamptz(6)
+  retiredAt                   DateTime?                       @db.Timestamptz(6)
+  retirementReason            String?                         @db.VarChar(1000)
+  createdAt                   DateTime                        @default(now()) @db.Timestamptz(6)
+  updatedAt                   DateTime                        @updatedAt @db.Timestamptz(6)
+  textbookEdition             TextbookEdition                 @relation(fields: [textbookEditionId], references: [id], onDelete: Cascade)
+  unit                        Unit                            @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  createdBy                   User                            @relation("QuestionBankItemCreator", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  reviewedBy                  User?                           @relation("QuestionBankItemReviewer", fields: [reviewedByUserId], references: [id], onDelete: SetNull)
+  knowledgeLinks              QuestionBankItemKnowledgeNode[]
+  validations                 QuestionBankValidation[]
+  reviews                     QuestionBankReview[]
+  semanticMatches             QuestionBankSemanticDuplicate[] @relation("QuestionBankSemanticDuplicateSource")
+  semanticCandidateMatches    QuestionBankSemanticDuplicate[] @relation("QuestionBankSemanticDuplicateCandidate")
+  licenseReviews              QuestionBankLicenseReview[]
+  releases                    QuestionBankRelease[]
 
   @@index([subjectCode, grade, textbookEditionId, unitId, status])
   @@index([dedupeHash, status])
@@ -851,11 +884,14 @@ model QuestionBankValidation {
   questionBankItemId String                       @db.Uuid
   kind               QuestionBankValidationKind
   status             QuestionBankValidationStatus
+  contentHash        String                       @db.Char(64)
+  performedByUserId  String?                      @db.Uuid
   details            Json
   createdAt          DateTime                     @default(now()) @db.Timestamptz(6)
   questionBankItem   QuestionBankItem             @relation(fields: [questionBankItemId], references: [id], onDelete: Cascade)
+  performedBy        User?                        @relation("QuestionBankValidationPerformer", fields: [performedByUserId], references: [id], onDelete: SetNull)
 
-  @@index([questionBankItemId, kind, createdAt])
+  @@index([questionBankItemId, contentHash, kind, createdAt])
 }
 
 model QuestionBankReview {
@@ -864,11 +900,78 @@ model QuestionBankReview {
   reviewerUserId     String                     @db.Uuid
   decision           QuestionBankReviewDecision
   comment            String                     @db.VarChar(1000)
+  contentHash        String                     @db.Char(64)
+  attestation        String                     @db.VarChar(80)
   createdAt          DateTime                   @default(now()) @db.Timestamptz(6)
   questionBankItem   QuestionBankItem           @relation(fields: [questionBankItemId], references: [id], onDelete: Cascade)
   reviewer           User                       @relation(fields: [reviewerUserId], references: [id], onDelete: Restrict)
 
   @@index([questionBankItemId, createdAt])
+}
+
+model QuestionBankSemanticDuplicate {
+  id                   String                                @id @default(uuid()) @db.Uuid
+  questionBankItemId   String                                @db.Uuid
+  candidateItemId      String                                @db.Uuid
+  contentHash          String                                @db.Char(64)
+  candidateContentHash String                                @db.Char(64)
+  embeddingModel       String                                @db.VarChar(120)
+  similarity           Float                                 @db.DoublePrecision
+  threshold            Float                                 @db.DoublePrecision
+  decision             QuestionBankSemanticDuplicateDecision @default(PENDING)
+  reviewerUserId       String?                               @db.Uuid
+  comment              String?                               @db.VarChar(1000)
+  attestation          String?                               @db.VarChar(80)
+  reviewedAt           DateTime?                             @db.Timestamptz(6)
+  createdAt            DateTime                              @default(now()) @db.Timestamptz(6)
+  updatedAt            DateTime                              @updatedAt @db.Timestamptz(6)
+  questionBankItem     QuestionBankItem                      @relation("QuestionBankSemanticDuplicateSource", fields: [questionBankItemId], references: [id], onDelete: Cascade)
+  candidateItem        QuestionBankItem                      @relation("QuestionBankSemanticDuplicateCandidate", fields: [candidateItemId], references: [id], onDelete: Cascade)
+  reviewer             User?                                 @relation("QuestionBankSemanticDuplicateReviewer", fields: [reviewerUserId], references: [id], onDelete: SetNull)
+
+  @@unique([questionBankItemId, candidateItemId, contentHash, candidateContentHash, embeddingModel])
+  @@index([questionBankItemId, contentHash, embeddingModel, decision])
+  @@index([candidateItemId, candidateContentHash])
+}
+
+model QuestionBankLicenseReview {
+  id                 String               @id @default(uuid()) @db.Uuid
+  questionBankItemId String               @db.Uuid
+  reviewerUserId     String               @db.Uuid
+  contentHash        String               @db.Char(64)
+  decision           ContentLicenseStatus
+  basis              String               @db.VarChar(2000)
+  evidenceReference  String               @db.VarChar(500)
+  evidenceSha256     String               @db.Char(64)
+  reviewerReference  String               @db.VarChar(120)
+  attestation        String               @db.VarChar(80)
+  createdAt          DateTime             @default(now()) @db.Timestamptz(6)
+  questionBankItem   QuestionBankItem     @relation(fields: [questionBankItemId], references: [id], onDelete: Cascade)
+  reviewer           User                 @relation("QuestionBankLicenseReviewer", fields: [reviewerUserId], references: [id], onDelete: Restrict)
+
+  @@index([questionBankItemId, contentHash, createdAt])
+}
+
+model QuestionBankRelease {
+  id                 String                    @id @default(uuid()) @db.Uuid
+  questionBankItemId String                    @db.Uuid
+  version            Int
+  contentHash        String                    @db.Char(64)
+  gateEvidenceHash   String                    @db.Char(64)
+  status             QuestionBankReleaseStatus @default(ACTIVE)
+  publishedByUserId  String                    @db.Uuid
+  publishedAt        DateTime                  @default(now()) @db.Timestamptz(6)
+  rolledBackByUserId String?                   @db.Uuid
+  rolledBackAt       DateTime?                 @db.Timestamptz(6)
+  rollbackReason     String?                   @db.VarChar(1000)
+  createdAt          DateTime                  @default(now()) @db.Timestamptz(6)
+  updatedAt          DateTime                  @updatedAt @db.Timestamptz(6)
+  questionBankItem   QuestionBankItem          @relation(fields: [questionBankItemId], references: [id], onDelete: Restrict)
+  publishedBy        User                      @relation("QuestionBankReleasePublisher", fields: [publishedByUserId], references: [id], onDelete: Restrict)
+  rolledBackBy       User?                     @relation("QuestionBankReleaseRollbackActor", fields: [rolledBackByUserId], references: [id], onDelete: Restrict)
+
+  @@unique([questionBankItemId, version])
+  @@index([status, publishedAt])
 }
 
 model TutorSession {

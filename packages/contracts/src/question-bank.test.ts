@@ -2,8 +2,15 @@ import { describe, expect, it } from "vitest";
 
 import {
   CreateQuestionBankDraftInputSchema,
+  HumanSubjectReviewQuestionBankInputSchema,
   IndependentQuestionBankSolverResultSchema,
+  PublishQuestionBankInputSchema,
+  RecordIndependentQuestionBankSolveInputSchema,
   RegisterTextbookAssetInputSchema,
+  ReviewQuestionBankLicenseInputSchema,
+  ReviewQuestionBankInputSchema,
+  RollbackQuestionBankReleaseInputSchema,
+  SemanticDeduplicateQuestionBankInputSchema,
   ValidateQuestionBankSolverInputSchema,
 } from "./question-bank.js";
 
@@ -75,6 +82,63 @@ describe("question-bank contracts", () => {
     expect(IndependentQuestionBankSolverResultSchema.safeParse({
       ...result,
       reviewerRealName: "not collected",
+    }).success).toBe(false);
+    expect(RecordIndependentQuestionBankSolveInputSchema.safeParse({
+      ...result,
+      confirmation: "RECORD_INDEPENDENT_QUESTION_BANK_SOLVE",
+    }).success).toBe(true);
+  });
+
+  it("requires real semantic embeddings and explicit human evidence attestations", () => {
+    expect(SemanticDeduplicateQuestionBankInputSchema.safeParse({
+      embeddingModel: "text-embedding-production-v1",
+      embedding: [1, 0, 0, 0, 0, 0, 0, 0],
+      attestation: "REAL_SEMANTIC_EMBEDDING_NOT_HASH_HEURISTIC",
+      confirmation: "SEMANTIC_DEDUPLICATE_QUESTION_BANK_ITEM",
+    }).success).toBe(true);
+    expect(SemanticDeduplicateQuestionBankInputSchema.safeParse({
+      embeddingModel: "text-embedding-production-v1",
+      embedding: [1, 0, 0],
+      attestation: "REAL_SEMANTIC_EMBEDDING_NOT_HASH_HEURISTIC",
+      confirmation: "SEMANTIC_DEDUPLICATE_QUESTION_BANK_ITEM",
+    }).success).toBe(false);
+    expect(HumanSubjectReviewQuestionBankInputSchema.safeParse({
+      passed: true,
+      reviewerReference: "reviewer-pseudonym-01",
+      notes: "已独立核对题干、答案、解析和教材知识点。",
+      evidenceReferences: ["external-review-register:physics-001"],
+      attestation: "HUMAN_SUBJECT_FACT_REVIEW_COMPLETED",
+      confirmation: "RECORD_HUMAN_SUBJECT_REVIEW",
+    }).success).toBe(true);
+    expect(ReviewQuestionBankLicenseInputSchema.safeParse({
+      decision: "AUTHORIZED",
+      reviewerReference: "license-reviewer-01",
+      basis: "权利人书面授权覆盖题库展示和学生使用。",
+      evidenceReference: "external-license-register:authorization-001",
+      evidenceSha256: "a".repeat(64),
+      attestation: "HUMAN_LICENSE_REVIEW_COMPLETED",
+      confirmation: "REVIEW_QUESTION_BANK_LICENSE",
+    }).success).toBe(true);
+  });
+
+  it("requires explicit final-review, publish, and rollback attestations", () => {
+    expect(ReviewQuestionBankInputSchema.safeParse({
+      decision: "APPROVED",
+      comment: "全部发布门槛均已复核。",
+      attestation: "FINAL_ADMIN_CONTENT_REVIEW_COMPLETED",
+      confirmation: "REVIEW_QUESTION_BANK_ITEM",
+    }).success).toBe(true);
+    expect(PublishQuestionBankInputSchema.safeParse({
+      attestation: "PUBLISH_WITH_VERIFIED_RELEASE_GATES",
+      confirmation: "PUBLISH_QUESTION_BANK_ITEM",
+    }).success).toBe(true);
+    expect(RollbackQuestionBankReleaseInputSchema.safeParse({
+      reason: "发现内容问题，立即退役并进入复核流程。",
+      attestation: "ROLLBACK_QUESTION_BANK_RELEASE",
+      confirmation: "RETIRE_PUBLISHED_QUESTION_BANK_ITEM",
+    }).success).toBe(true);
+    expect(PublishQuestionBankInputSchema.safeParse({
+      confirmation: "PUBLISH_QUESTION_BANK_ITEM",
     }).success).toBe(false);
   });
 

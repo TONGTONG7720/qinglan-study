@@ -114,6 +114,11 @@ export const IndependentQuestionBankSolverResultSchema = z.object({
 }).strict();
 export type IndependentQuestionBankSolverResult = z.infer<typeof IndependentQuestionBankSolverResultSchema>;
 
+export const RecordIndependentQuestionBankSolveInputSchema = IndependentQuestionBankSolverResultSchema.extend({
+  confirmation: z.literal("RECORD_INDEPENDENT_QUESTION_BANK_SOLVE"),
+});
+export type RecordIndependentQuestionBankSolveInput = z.infer<typeof RecordIndependentQuestionBankSolveInputSchema>;
+
 export const DeduplicateQuestionBankInputSchema = z.object({
   confirmation: z.literal("DEDUPLICATE_QUESTION_BANK_ITEM"),
 }).strict();
@@ -126,17 +131,63 @@ export const FactCheckQuestionBankInputSchema = z.object({
 }).strict();
 export type FactCheckQuestionBankInput = z.infer<typeof FactCheckQuestionBankInputSchema>;
 
+export const SemanticDeduplicateQuestionBankInputSchema = z.object({
+  embeddingModel: z.string().trim().min(3).max(120),
+  embedding: z.array(z.number()).min(8).max(4_096),
+  attestation: z.literal("REAL_SEMANTIC_EMBEDDING_NOT_HASH_HEURISTIC"),
+  confirmation: z.literal("SEMANTIC_DEDUPLICATE_QUESTION_BANK_ITEM"),
+}).strict();
+export type SemanticDeduplicateQuestionBankInput = z.infer<typeof SemanticDeduplicateQuestionBankInputSchema>;
+
+export const ReviewSemanticDuplicateInputSchema = z.object({
+  decision: z.enum(["DISTINCT", "DUPLICATE"]),
+  comment: z.string().trim().min(8).max(1_000),
+  attestation: z.literal("HUMAN_SEMANTIC_DUPLICATE_REVIEW_COMPLETED"),
+  confirmation: z.literal("REVIEW_SEMANTIC_DUPLICATE_CANDIDATE"),
+}).strict();
+export type ReviewSemanticDuplicateInput = z.infer<typeof ReviewSemanticDuplicateInputSchema>;
+
+export const HumanSubjectReviewQuestionBankInputSchema = z.object({
+  passed: z.boolean(),
+  reviewerReference: z.string().trim().min(3).max(120),
+  notes: z.string().trim().min(8).max(2_000),
+  evidenceReferences: z.array(z.string().trim().min(8).max(500)).min(1).max(20),
+  attestation: z.literal("HUMAN_SUBJECT_FACT_REVIEW_COMPLETED"),
+  confirmation: z.literal("RECORD_HUMAN_SUBJECT_REVIEW"),
+}).strict();
+export type HumanSubjectReviewQuestionBankInput = z.infer<typeof HumanSubjectReviewQuestionBankInputSchema>;
+
+export const ReviewQuestionBankLicenseInputSchema = z.object({
+  decision: z.enum(["AUTHORIZED", "PUBLIC_DOMAIN", "PROHIBITED"]),
+  reviewerReference: z.string().trim().min(3).max(120),
+  basis: z.string().trim().min(8).max(2_000),
+  evidenceReference: z.string().trim().min(8).max(500),
+  evidenceSha256: z.string().regex(/^[0-9a-f]{64}$/u),
+  attestation: z.literal("HUMAN_LICENSE_REVIEW_COMPLETED"),
+  confirmation: z.literal("REVIEW_QUESTION_BANK_LICENSE"),
+}).strict();
+export type ReviewQuestionBankLicenseInput = z.infer<typeof ReviewQuestionBankLicenseInputSchema>;
+
 export const ReviewQuestionBankInputSchema = z.object({
   decision: z.enum(["APPROVED", "CHANGES_REQUESTED", "REJECTED"]),
   comment: z.string().trim().min(4).max(1_000),
+  attestation: z.literal("FINAL_ADMIN_CONTENT_REVIEW_COMPLETED"),
   confirmation: z.literal("REVIEW_QUESTION_BANK_ITEM"),
 }).strict();
 export type ReviewQuestionBankInput = z.infer<typeof ReviewQuestionBankInputSchema>;
 
 export const PublishQuestionBankInputSchema = z.object({
+  attestation: z.literal("PUBLISH_WITH_VERIFIED_RELEASE_GATES"),
   confirmation: z.literal("PUBLISH_QUESTION_BANK_ITEM"),
 }).strict();
 export type PublishQuestionBankInput = z.infer<typeof PublishQuestionBankInputSchema>;
+
+export const RollbackQuestionBankReleaseInputSchema = z.object({
+  reason: z.string().trim().min(8).max(1_000),
+  attestation: z.literal("ROLLBACK_QUESTION_BANK_RELEASE"),
+  confirmation: z.literal("RETIRE_PUBLISHED_QUESTION_BANK_ITEM"),
+}).strict();
+export type RollbackQuestionBankReleaseInput = z.infer<typeof RollbackQuestionBankReleaseInputSchema>;
 
 export const RegisterTextbookAssetInputSchema = z.object({
   textbookEditionId: z.uuid(),
@@ -169,6 +220,24 @@ export const QuestionBankItemSummarySchema = z.object({
   status: QuestionBankStatusSchema,
 }).strict();
 export type QuestionBankItemSummary = z.infer<typeof QuestionBankItemSummarySchema>;
+
+export const QuestionBankSemanticCandidateSchema = z.object({
+  id: z.uuid(),
+  candidateItemId: z.uuid(),
+  candidateStableKey: z.string(),
+  similarity: z.number().min(-1).max(1),
+  threshold: z.number().min(0).max(1),
+  decision: z.enum(["PENDING", "DISTINCT", "DUPLICATE"]),
+}).strict();
+export type QuestionBankSemanticCandidate = z.infer<typeof QuestionBankSemanticCandidateSchema>;
+
+export const QuestionBankSemanticDeduplicationResultSchema = z.object({
+  item: QuestionBankItemSummarySchema,
+  coverageComplete: z.boolean(),
+  uncoveredItemCount: z.number().int().nonnegative(),
+  candidates: z.array(QuestionBankSemanticCandidateSchema),
+}).strict();
+export type QuestionBankSemanticDeduplicationResult = z.infer<typeof QuestionBankSemanticDeduplicationResultSchema>;
 
 export const TextbookAssetSummarySchema = z.object({
   id: z.uuid(),
