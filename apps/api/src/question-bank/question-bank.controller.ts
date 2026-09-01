@@ -2,12 +2,23 @@ import {
   CreateQuestionBankDraftInputSchema,
   DeduplicateQuestionBankInputSchema,
   FactCheckQuestionBankInputSchema,
+  HumanSubjectReviewQuestionBankInputSchema,
   PublishQuestionBankInputSchema,
+  RecordIndependentQuestionBankSolveInputSchema,
   RegisterTextbookAssetInputSchema,
+  ReviewQuestionBankLicenseInputSchema,
   ReviewQuestionBankInputSchema,
+  ReviewSemanticDuplicateInputSchema,
+  RollbackQuestionBankReleaseInputSchema,
+  SemanticDeduplicateQuestionBankInputSchema,
   ValidateQuestionBankSolverInputSchema,
 } from "@study/contracts";
-import type { CurrentUser, QuestionBankItemSummary, TextbookAssetSummary } from "@study/contracts";
+import type {
+  CurrentUser,
+  QuestionBankItemSummary,
+  QuestionBankSemanticDeduplicationResult,
+  TextbookAssetSummary,
+} from "@study/contracts";
 import { BadRequestException, Body, Controller, Param, Post, Req, UnauthorizedException } from "@nestjs/common";
 import type { Request } from "express";
 import { z } from "zod";
@@ -37,14 +48,44 @@ export class QuestionBankController {
     return this.service.validateSolver(await this.actor(request), this.uuid(id), this.parse(ValidateQuestionBankSolverInputSchema, body), readIdempotencyKey(request));
   }
 
+  @Post("question-bank/items/:id/independent-solve")
+  async recordIndependentSolve(@Req() request: Request, @Param("id") id: string, @Body() body: unknown): Promise<QuestionBankItemSummary> {
+    return this.service.recordIndependentSolve(await this.actor(request), this.uuid(id), this.parse(RecordIndependentQuestionBankSolveInputSchema, body), readIdempotencyKey(request));
+  }
+
   @Post("question-bank/items/:id/deduplicate")
   async deduplicate(@Req() request: Request, @Param("id") id: string, @Body() body: unknown): Promise<QuestionBankItemSummary> {
     return this.service.deduplicate(await this.actor(request), this.uuid(id), this.parse(DeduplicateQuestionBankInputSchema, body), readIdempotencyKey(request));
   }
 
+  @Post("question-bank/items/:id/semantic-deduplicate")
+  async semanticDeduplicate(@Req() request: Request, @Param("id") id: string, @Body() body: unknown): Promise<QuestionBankSemanticDeduplicationResult> {
+    return this.service.semanticDeduplicate(await this.actor(request), this.uuid(id), this.parse(SemanticDeduplicateQuestionBankInputSchema, body), readIdempotencyKey(request));
+  }
+
+  @Post("question-bank/items/:id/semantic-duplicates/:matchId/review")
+  async reviewSemanticDuplicate(
+    @Req() request: Request,
+    @Param("id") id: string,
+    @Param("matchId") matchId: string,
+    @Body() body: unknown,
+  ): Promise<QuestionBankItemSummary> {
+    return this.service.reviewSemanticDuplicate(await this.actor(request), this.uuid(id), this.uuid(matchId), this.parse(ReviewSemanticDuplicateInputSchema, body), readIdempotencyKey(request));
+  }
+
   @Post("question-bank/items/:id/fact-check")
   async factCheck(@Req() request: Request, @Param("id") id: string, @Body() body: unknown): Promise<QuestionBankItemSummary> {
     return this.service.factCheck(await this.actor(request), this.uuid(id), this.parse(FactCheckQuestionBankInputSchema, body), readIdempotencyKey(request));
+  }
+
+  @Post("question-bank/items/:id/human-subject-review")
+  async recordHumanSubjectReview(@Req() request: Request, @Param("id") id: string, @Body() body: unknown): Promise<QuestionBankItemSummary> {
+    return this.service.recordHumanSubjectReview(await this.actor(request), this.uuid(id), this.parse(HumanSubjectReviewQuestionBankInputSchema, body), readIdempotencyKey(request));
+  }
+
+  @Post("question-bank/items/:id/license-review")
+  async reviewLicense(@Req() request: Request, @Param("id") id: string, @Body() body: unknown): Promise<QuestionBankItemSummary> {
+    return this.service.reviewLicense(await this.actor(request), this.uuid(id), this.parse(ReviewQuestionBankLicenseInputSchema, body), readIdempotencyKey(request));
   }
 
   @Post("question-bank/items/:id/review")
@@ -55,6 +96,11 @@ export class QuestionBankController {
   @Post("question-bank/items/:id/publish")
   async publish(@Req() request: Request, @Param("id") id: string, @Body() body: unknown): Promise<QuestionBankItemSummary> {
     return this.service.publish(await this.actor(request), this.uuid(id), this.parse(PublishQuestionBankInputSchema, body), readIdempotencyKey(request));
+  }
+
+  @Post("question-bank/items/:id/rollback")
+  async rollback(@Req() request: Request, @Param("id") id: string, @Body() body: unknown): Promise<QuestionBankItemSummary> {
+    return this.service.rollbackRelease(await this.actor(request), this.uuid(id), this.parse(RollbackQuestionBankReleaseInputSchema, body), readIdempotencyKey(request));
   }
 
   @Post("textbook-assets")
